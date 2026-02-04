@@ -1,0 +1,67 @@
+# .dockerignore - Prevents sensitive files from being copied to the image
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets and sensitive files
+*.pem
+*.key
+*.crt
+*.p12
+.env
+.env.local
+secrets.txt
+config.ini
+
+# Documentation
+*.md
+docs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+
+# Docker files (don't copy other Dockerfiles)
+Dockerfile
+docker-compose*.yml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Security scan results
+scan_*.txt
+audit_report.txt

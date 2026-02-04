@@ -1,0 +1,139 @@
+# .dockerignore - Prevents sensitive and unnecessary files from being copied to the image
+# This is a critical security practice to avoid leaking secrets and reducing image size
+
+# ==================== GIT FILES ====================
+.git
+.gitignore
+.gitattributes
+.github/
+
+# ==================== PYTHON CACHE ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==================== VIRTUAL ENVIRONMENTS ====================
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+virtualenv/
+
+# ==================== IDE AND EDITOR FILES ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.vs/
+
+# ==================== SENSITIVE FILES (CRITICAL!) ====================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+.env
+.env.local
+.env.*.local
+secrets.txt
+secrets.json
+config.ini
+credentials.json
+token.txt
+*.secret
+
+# ==================== DOCUMENTATION ====================
+*.md
+README*
+CHANGELOG*
+LICENSE*
+docs/
+documentation/
+
+# ==================== TEST FILES ====================
+tests/
+test_*.py
+*_test.py
+*.test.js
+test/
+__tests__/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==================== CI/CD CONFIG ====================
+.travis.yml
+.gitlab-ci.yml
+.circleci/
+Jenkinsfile
+azure-pipelines.yml
+.github/workflows/
+
+# ==================== DOCKER FILES ====================
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# ==================== LOG FILES ====================
+*.log
+logs/
+*.log.*
+
+# ==================== TEMPORARY FILES ====================
+*.tmp
+temp/
+tmp/
+*.bak
+*.backup
+
+# ==================== SECURITY SCAN RESULTS ====================
+scan_*.txt
+scan_*.json
+audit_report.*
+vulnerability_report.*
+trivy_results.*
+dockle_results.*
+
+# ==================== DATABASE FILES ====================
+*.db
+*.sqlite
+*.sqlite3
+
+# ==================== OS FILES ====================
+Thumbs.db
+Desktop.ini
+
+# ==================== NODE (if applicable) ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

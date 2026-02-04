@@ -1,0 +1,84 @@
+# Vulnerable Flask App Deployment - DO NOT USE IN PRODUCTION
+# This manifest demonstrates security misconfigurations
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flask-vulnerable
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app-vulnerable
+  namespace: flask-vulnerable
+  labels:
+    app: flask-vulnerable
+    security: insecure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flask-vulnerable
+  template:
+    metadata:
+      labels:
+        app: flask-vulnerable
+    spec:
+      # ❌ No security context - runs as root
+      # ❌ No resource limits
+      # ❌ No pod security standards
+      containers:
+      - name: flask-app
+        image: flask-app-vulnerable:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        # ❌ Hardcoded secrets in environment variables
+        env:
+        - name: API_KEY
+          value: "super-secret-api-key-12345"
+        - name: DB_PASSWORD
+          value: "admin123"
+        - name: SECRET_KEY
+          value: "flask-secret-key"
+        # ❌ No resource limits - can consume unlimited CPU/memory
+        # ❌ No liveness/readiness probes
+        # ❌ No security capabilities restrictions
+        securityContext:
+          privileged: true  # ❌ Privileged mode - dangerous!
+          allowPrivilegeEscalation: true
+          runAsNonRoot: false
+          runAsUser: 0  # Running as root
+          capabilities:
+            add:
+            - ALL  # ❌ All capabilities enabled
+        volumeMounts:
+        - name: host-root
+          mountPath: /host  # ❌ Mounting host filesystem
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /  # ❌ Exposing entire host filesystem
+          type: Directory
+      # ❌ No pod security context
+      # ❌ No network policies
+      # ❌ No service account restrictions
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-vulnerable-service
+  namespace: flask-vulnerable
+spec:
+  type: LoadBalancer  # ❌ Exposed to internet
+  selector:
+    app: flask-vulnerable
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+---
+# ❌ No NetworkPolicy - all traffic allowed
+# ❌ No ResourceQuota
+# ❌ No LimitRange
+# ❌ No PodSecurityPolicy/PodSecurityStandards

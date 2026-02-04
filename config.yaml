@@ -1,0 +1,65 @@
+# Container Security Audit Configuration
+# Customize scanning parameters, thresholds, and reporting options
+
+project:
+  name: "Container Security Audit"
+  version: "2.0"
+  author: "DevSecOps Team"
+
+# Docker image settings
+images:
+  vulnerable:
+    name: "flask-app-vulnerable"
+    dockerfile: "Dockerfile.vuln"
+    context: "."
+  hardened:
+    name: "flask-app-hardened"
+    dockerfile: "Dockerfile.hardened"
+    context: "."
+
+# Security scanning tools configuration
+scanning:
+  trivy:
+    enabled: true
+    severity: ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+    timeout: 300
+    ignore_unfixed: false
+    
+  dockle:
+    enabled: true
+    ignore_codes: []
+    timeout: 120
+    
+  syft:
+    enabled: true
+    format: "json"
+    
+# Vulnerability thresholds (fail build if exceeded)
+thresholds:
+  critical: 5
+  high: 20
+  medium: 50
+  low: 100
+  image_size_mb: 500
+
+# Report generation settings
+reporting:
+  formats:
+    - "json"
+    - "html"
+    - "text"
+  output_dir: "reports"
+  historical_tracking: true
+  max_history: 30
+  
+# Notification settings
+notifications:
+  enabled: false
+  slack_webhook: ""
+  email: ""
+
+# CI/CD Integration
+cicd:
+  fail_on_threshold_exceeded: true
+  export_metrics: true
+  metrics_file: "metrics.json"

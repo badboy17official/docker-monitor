@@ -1,0 +1,148 @@
+name: Container Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly security scans
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+      
+      - name: Install Trivy
+        run: |
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+      
+      - name: Install Dockle
+        run: |
+          VERSION=$(curl --silent "https://api.github.com/repos/goodwithtech/dockle/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+          wget https://github.com/goodwithtech/dockle/releases/download/v${VERSION}/dockle_${VERSION}_Linux-64bit.tar.gz
+          tar zxvf dockle_${VERSION}_Linux-64bit.tar.gz
+          sudo mv dockle /usr/local/bin/
+      
+      - name: Build vulnerable image
+        run: |
+          docker build -f Dockerfile.vuln -t flask-app-vulnerable:ci .
+      
+      - name: Build hardened image
+        run: |
+          docker build -f Dockerfile.hardened -t flask-app-hardened:ci .
+      
+      - name: Scan vulnerable image with Trivy
+        continue-on-error: true
+        run: |
+          trivy image --format json --output trivy-vulnerable.json flask-app-vulnerable:ci
+          trivy image --severity HIGH,CRITICAL --exit-code 1 flask-app-vulnerable:ci || true
+      
+      - name: Scan hardened image with Trivy
+        run: |
+          trivy image --format json --output trivy-hardened.json flask-app-hardened:ci
+          trivy image --severity CRITICAL --exit-code 1 flask-app-hardened:ci
+      
+      - name: Scan vulnerable image with Dockle
+        continue-on-error: true
+        run: |
+          dockle --format json --output dockle-vulnerable.json flask-app-vulnerable:ci || true
+      
+      - name: Scan hardened image with Dockle
+        run: |
+          dockle --format json --output dockle-hardened.json --exit-code 1 --exit-level warn flask-app-hardened:ci
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-hardened.json'
+          category: trivy
+      
+      - name: Run security audit
+        run: |
+          python audit.py
+      
+      - name: Upload scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            reports/
+            scan_*.txt
+            trivy-*.json
+            dockle-*.json
+      
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'reports/audit_report_latest.json';
+            
+            if (fs.existsSync(reportPath)) {
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              
+              const body = `## 🔒 Container Security Audit Results
+              
+              ### Vulnerability Comparison
+              | Metric | Vulnerable | Hardened | Improvement |
+              |--------|-----------|----------|-------------|
+              | Image Size | ${report.comparison.size_vulnerable} | ${report.comparison.size_hardened} | ${report.comparison.size_reduction_percent}% |
+              | Total CVEs | ${report.comparison.vuln_vulnerable} | ${report.comparison.vuln_hardened} | ${report.comparison.vuln_reduction_percent}% |
+              | Critical | ${report.vulnerable.critical} | ${report.hardened.critical} | -${report.vulnerable.critical - report.hardened.critical} |
+              | High | ${report.vulnerable.high} | ${report.hardened.high} | -${report.vulnerable.high - report.hardened.high} |
+              
+              [View detailed report](../actions/runs/${{ github.run_id }})
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+      
+      - name: Fail if thresholds exceeded
+        run: |
+          python -c "
+          import json
+          with open('reports/audit_report_latest.json') as f:
+              data = json.load(f)
+          
+          hardened = data['hardened']
+          if hardened.get('critical', 0) > 5:
+              print('❌ CRITICAL vulnerabilities exceed threshold!')
+              exit(1)
+          if hardened.get('high', 0) > 20:
+              print('❌ HIGH vulnerabilities exceed threshold!')
+              exit(1)
+          
+          print('✅ All thresholds passed!')
+          "

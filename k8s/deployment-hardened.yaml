@@ -1,0 +1,333 @@
+# Hardened Flask App Deployment - Production Ready
+# This manifest follows Kubernetes security best practices
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flask-hardened
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flask-app-sa
+  namespace: flask-hardened
+automountServiceAccountToken: false  # ✅ Don't auto-mount SA token
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flask-app-secrets
+  namespace: flask-hardened
+type: Opaque
+stringData:
+  # ✅ Secrets stored in Kubernetes Secrets (should use external secret management in production)
+  api-key: "USE_EXTERNAL_SECRET_MANAGER"
+  db-password: "USE_EXTERNAL_SECRET_MANAGER"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flask-app-config
+  namespace: flask-hardened
+data:
+  app.conf: |
+    # Application configuration
+    LOG_LEVEL=INFO
+    ENVIRONMENT=production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app-hardened
+  namespace: flask-hardened
+  labels:
+    app: flask-hardened
+    security: hardened
+    version: v1
+spec:
+  replicas: 3  # ✅ Multiple replicas for availability
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: flask-hardened
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: flask-hardened
+        version: v1
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/flask-app: runtime/default
+    spec:
+      serviceAccountName: flask-app-sa
+      automountServiceAccountToken: false
+      
+      # ✅ Pod-level security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups: [4000]
+      
+      containers:
+      - name: flask-app
+        image: flask-app-hardened:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+        
+        # ✅ Environment variables from ConfigMap and Secrets
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flask-app-secrets
+              key: api-key
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: flask-app-secrets
+              key: db-password
+        
+        # ✅ Resource limits and requests
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        # ✅ Container-level security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL  # Drop all capabilities
+            add:
+            - NET_BIND_SERVICE  # Only add required capabilities
+          seccompProfile:
+            type: RuntimeDefault
+        
+        # ✅ Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30
+        
+        # ✅ Volume mounts with read-only where possible
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.cache
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      
+      # ✅ Volumes - using emptyDir for writable directories
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: cache
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: config
+        configMap:
+          name: flask-app-config
+          defaultMode: 0444  # Read-only
+      
+      # ✅ Additional security settings
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
+      
+      # ✅ DNS policy
+      dnsPolicy: ClusterFirst
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-hardened-service
+  namespace: flask-hardened
+  labels:
+    app: flask-hardened
+spec:
+  type: ClusterIP  # ✅ Internal only, use Ingress for external access
+  selector:
+    app: flask-hardened
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: http
+  sessionAffinity: None
+---
+# ✅ Network Policy - restrict traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flask-app-netpol
+  namespace: flask-hardened
+spec:
+  podSelector:
+    matchLabels:
+      app: flask-hardened
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx  # Only allow ingress controller
+    ports:
+    - protocol: TCP
+      port: 5000
+  egress:
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 53   # DNS
+    - protocol: UDP
+      port: 53   # DNS
+---
+# ✅ Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: flask-app-quota
+  namespace: flask-hardened
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+    pods: "10"
+    services: "5"
+---
+# ✅ Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: flask-app-limits
+  namespace: flask-hardened
+spec:
+  limits:
+  - max:
+      memory: 512Mi
+      cpu: 500m
+    min:
+      memory: 32Mi
+      cpu: 50m
+    default:
+      memory: 128Mi
+      cpu: 200m
+    defaultRequest:
+      memory: 64Mi
+      cpu: 100m
+    type: Container
+---
+# ✅ Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flask-app-pdb
+  namespace: flask-hardened
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: flask-hardened
+---
+# ✅ Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: flask-app-hpa
+  namespace: flask-hardened
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: flask-app-hardened
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30

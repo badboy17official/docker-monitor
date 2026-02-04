@@ -1,0 +1,60 @@
+# ✅ HARDENED DOCKERFILE - Security Best Practices Applied
+# File: Dockerfile.hardened
+
+# SECURITY FIX 1: Use pinned, minimal base image
+# Benefit: Deterministic builds, smaller attack surface, fewer vulnerabilities
+FROM python:3.11.6-slim-bookworm
+
+# Add metadata labels
+LABEL maintainer="devsecops@example.com"
+LABEL description="Hardened Flask application container"
+LABEL version="1.0.0"
+
+# SECURITY FIX 2: No hardcoded secrets
+# Benefit: Secrets managed externally via environment variables or secrets management
+ENV APP_ENV=production
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# SECURITY FIX 3: Only install required system packages (if any)
+# Benefit: Minimal attack surface, fewer CVEs to patch
+# For this app, we don't need any additional system packages
+
+# Create application directory
+WORKDIR /app
+
+# SECURITY FIX 4: Copy only necessary files (enforced by .dockerignore)
+# Install dependencies first for better layer caching
+COPY app/app.py .
+
+# SECURITY FIX 5: Install only required Python packages
+# Benefit: Reduced dependencies, faster builds, smaller image
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir Flask==3.0.0 Werkzeug==3.0.1
+
+# SECURITY FIX 6: Create non-root user with minimal privileges
+# Benefit: Limits damage if container is compromised
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -u 1001 -m -s /sbin/nologin -c "Application user" appuser && \
+    chown -R appuser:appuser /app
+
+# SECURITY FIX 7: Only expose necessary ports
+# Benefit: Reduced attack surface
+EXPOSE 5000
+
+# SECURITY FIX 8: Switch to non-root user
+# All subsequent commands run as this user
+USER appuser
+
+# Set environment variable for Flask
+ENV FLASK_APP=app.py
+ENV FLASK_DEBUG=0
+
+# SECURITY FIX 9: Add health check
+# Benefit: Container orchestrators can detect and restart unhealthy containers
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()" || exit 1
+
+# SECURITY FIX 10: Use exec form of CMD (doesn't spawn shell)
+# Benefit: Proper signal handling, no unnecessary shell process
+CMD ["python", "-u", "app.py"]
