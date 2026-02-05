@@ -25,3 +25,13 @@ Jinja2>=3.1.2
 # requests==2.31.0  # For API calls
 # docker==7.0.0     # For programmatic Docker control
 # pyyaml==6.0.1     # For YAML configuration files
+grations
+# pandas>=2.0.0  # For advanced analytics
+
+# No other external Python packages required for audit.py
+# The script uses only standard library modules:
+# - subprocess
+# - sys
+# - os
+# - shutil
+# - datetime

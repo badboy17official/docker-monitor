@@ -6,7 +6,7 @@
 # Risk: Non-deterministic builds, potential breaking changes
 FROM python:latest
 
-# VULNERABILITY 2: Hardcoded secret in environment variable
+# VULNERABILITY 2: Hardcoded secret in environment variablexpo9
 # Risk: Secrets exposed in image layers, accessible via 'docker inspect'
 ENV API_KEY=super_secret_api_key_12345
 ENV SECRET_TOKEN=hardcoded_token_xyz789
