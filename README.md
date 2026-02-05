@@ -1,6 +1,14 @@
-# Container Security Audit Project v2.0
+# 🐳 Docker DUCK - Container Security Audit Platform
 
-An enterprise-grade DevSecOps platform for automated container security assessment, demonstrating detection and remediation of insecure Docker configurations.
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Security](https://img.shields.io/badge/Security-Audit-red?style=for-the-badge)](https://github.com/badboy17official/docker-monitor)
+[![Trivy](https://img.shields.io/badge/Trivy-Scanner-blue?style=for-the-badge)](https://github.com/aquasecurity/trivy)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+> **Enterprise-grade DevSecOps platform for teaching Docker security through automated vulnerability scanning and hardening demonstrations**
+
+An educational platform for automated container security assessment, demonstrating detection and remediation of insecure Docker configurations.
 
 ## 🎯 Project Overview
 
