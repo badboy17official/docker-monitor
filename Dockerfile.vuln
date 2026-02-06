@@ -1,4 +1,4 @@
-# ⚠️ VULNERABLE DOCKERFILE - FOR EDUCATIONAL PURPOSES ONLY ⚠️
+# ⚠️ VULNERABLE DOCKERFILE  ⚠️
 # This Dockerfile contains intentional security misconfigurations
 # File: Dockerfile.vuln
 

@@ -40,6 +40,19 @@ def print_header(message):
     print(f"{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
 
 
+def print_project_banner():
+    """Print ASCII art project banner"""
+    banner = r"""
+    ██████╗  ██████╗  ██████╗██╗  ██╗███████╗██████╗     ███╗   ███╗ ██████╗ ███╗   ██╗██╗████████╗ ██████╗ ██████╗ 
+    ██╔══██╗██╔═══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗    ████╗ ████║██╔═══██╗████╗  ██║██║╚══██╔══╝██╔═══██╗██╔══██╗
+    ██║  ██║██║   ██║██║     █████╔╝ █████╗  ██████╔╝    ██╔████╔██║██║   ██║██╔██╗ ██║██║   ██║   ██║   ██║██████╔╝
+    ██║  ██║██║   ██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗    ██║╚██╔╝██║██║   ██║██║╚██╗██║██║   ██║   ██║   ██║██╔══██╗
+    ██████╔╝╚██████╔╝╚██████╗██║  ██╗███████╗██║  ██║    ██║ ╚═╝ ██║╚██████╔╝██║ ╚████║██║   ██║   ╚██████╔╝██║  ██║
+    ╚═════╝  ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝    ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
+"""
+    print(f"{Colors.OKCYAN}{Colors.BOLD}{banner}{Colors.ENDC}\n")
+
+
 def print_info(message):
     """Print info message"""
     print(f"{Colors.OKBLUE}[INFO]{Colors.ENDC} {message}")
@@ -247,6 +260,7 @@ def print_comparison(vulnerable_trivy, hardened_trivy, vulnerable_dockle, harden
 
 def main():
     """Main execution function"""
+    print_project_banner()
     print_header("Container Security Audit Tool")
     print_info("Starting security audit process...")
     print_info(f"Working directory: {os.getcwd()}")
