@@ -12,7 +12,7 @@ An educational platform for automated container security assessment, demonstrati
 
 ## 🎯 Project Overview
 
-**What's New in v2.0**: Web Dashboard, CI/CD Integration, Kubernetes Deployments, Enhanced Reporting
+**What's New in v2.1**: Web Dashboard, CI/CD Integration, Kubernetes Deployments, Enhanced Reporting
 
 This production-ready platform demonstrates:
 - ✅ Common Docker security misconfigurations
@@ -331,3 +331,4 @@ MIT License - Free for educational and commercial use
 
 **v2.0** - Enterprise-grade container security audit platform
 Made with ❤️ for DevSecOps teams
+
