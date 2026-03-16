@@ -1,37 +1,5 @@
-# Requirements for the Container Security Audit Project v2.0
-# Note: The Flask app and dashboard have their own requirements.txt
-
-# Core dependencies for report generation and configuration
+# Requirements for the Container Security Audit Project
 PyYAML>=6.0
 Jinja2>=3.1.2
-
-# Optional: For enhanced features
-# Flask>=3.0.0  # For dashboard (install separately in dashboard/)
-# requests>=2.31.0  # For API integrations
-# pandas>=2.0.0  # For advanced analytics
-
-# No other external Python packages required for audit.py
-# The script uses only standard library modules:
-# - subprocess
-# - sys
-# - os
-# - shutil
-# - datetime
-# - pathlib
-# - json
-# - pathlib
-
-# Optional: If you want to extend the script with additional features
-# requests==2.31.0  # For API calls
-# docker==7.0.0     # For programmatic Docker control
-# pyyaml==6.0.1     # For YAML configuration files
-grations
-# pandas>=2.0.0  # For advanced analytics
-
-# No other external Python packages required for audit.py
-# The script uses only standard library modules:
-# - subprocess
-# - sys
-# - os
-# - shutil
-# - datetime
+requests>=2.31.0
+docker>=7.0.0

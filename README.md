@@ -12,17 +12,23 @@ An educational platform for automated container security assessment, demonstrati
 
 ## 🎯 Project Overview
 
-**What's New in v2.1**: Web Dashboard, CI/CD Integration, Kubernetes Deployments, Enhanced Reporting
+**What's New in v3.0 (planned/implemented)**: Cloud CVE check-in, Real-Time Runtime Threat Engine, AI-assisted anomaly detection, plus all v2.x features
 
 This production-ready platform demonstrates:
 - ✅ Common Docker security misconfigurations
 - ✅ Container hardening best practices
-- ✅ Automated security scanning (Trivy + Dockle)
+- ✅ Automated multi-engine security scanning (Trivy + Dockle + Syft + Grype)
 - ✅ Interactive web dashboard with visualizations
 - ✅ CI/CD pipeline integration (GitHub Actions + GitLab CI)
 - ✅ Kubernetes security configurations
 - ✅ Multi-format reporting (JSON, HTML, Text)
 - ✅ Historical trend tracking
+- ✅ Real-time Docker runtime threat monitoring
+- ✅ AI-assisted threat scoring (behavior anomaly detection)
+- ✅ Optional cloud check-in API for CVE/runtime telemetry
+- ✅ Pretrained AI anomaly model for runtime threat detection
+- ✅ Real-time CVE detection with suggested package fixes
+- ✅ On-demand runtime security report generation (JSON/TXT)
 
 ## 📁 Directory Structure
 
@@ -170,13 +176,60 @@ kubectl get all -n flask-hardened
 - **Flexible Settings**: Enable/disable tools, set limits
 - **CI/CD Ready**: Export metrics for pipeline decisions
 
+### 6. Docker Security Control Panel (NEW in dashboard)
+- One-click runtime threat snapshot execution
+- One-click full audit trigger
+- Live tool status (Docker, Trivy, Dockle)
+- Running container list + restart/stop actions
+- Inline operation logs for operator visibility
+- Modern cybersecurity UI with neon-glass style and dark/light theme toggle
+
+
+
+## ⚡ Real-Time Threat Engine (v3.0)
+
+The project now includes a runtime monitoring engine that observes running Docker containers and scores suspicious behavior in near real-time.
+
+### What it monitors
+- CPU and memory spikes
+- Process-count anomalies (possible fork/spawn bursts)
+- Network throughput spikes (possible exfiltration)
+- Restart churn
+
+### Run it
+```bash
+python realtime_threat_engine.py
+```
+
+Single snapshot mode:
+```bash
+RUNTIME_MONITOR_MODE=once python realtime_threat_engine.py
+```
+
+Output file:
+- `runtime/runtime_threats_latest.json`
+
+### Cloud check-in
+Set in `config.yaml`:
+```yaml
+cloud:
+  enabled: true
+  endpoint: "https://security-api.example.com/ingest/runtime"
+  api_key_env: "CVE_CLOUD_API_KEY"
+```
+
+Then export your API key:
+```bash
+export CVE_CLOUD_API_KEY=your-token
+```
+
 ## 💡 Usage Examples
 
 ### Run Basic Audit
 ```bash
 python audit.py
 ```
-Output: scan_vulnerable.txt, scan_hardened.txt
+Output: scan_vulnerable.txt, scan_hardened.txt, reports/latest_multi_engine_summary.json
 
 ### Generate HTML Report
 ```bash
@@ -332,3 +385,13 @@ MIT License - Free for educational and commercial use
 **v2.0** - Enterprise-grade container security audit platform
 Made with ❤️ for DevSecOps teams
 
+
+
+### Generate Runtime Report On-Demand
+```bash
+# From dashboard button, or API:
+curl -X POST http://localhost:8080/api/control-panel/report/runtime \
+  -H "Content-Type: application/json" \
+  -d "{\"format\":\"json\"}"
+```
+Outputs report files under `reports/runtime_security_report_*.json|txt`.

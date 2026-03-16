@@ -33,6 +33,10 @@ scanning:
   syft:
     enabled: true
     format: "json"
+
+  grype:
+    enabled: true
+    format: "json"
     
 # Vulnerability thresholds (fail build if exceeded)
 thresholds:
@@ -63,3 +67,29 @@ cicd:
   fail_on_threshold_exceeded: true
   export_metrics: true
   metrics_file: "metrics.json"
+
+
+# Runtime threat monitoring (real-time Docker telemetry + AI-style anomaly scoring)
+runtime_monitoring:
+  enabled: true
+  poll_interval_seconds: 20
+  max_events: 100
+  ai_window_size: 12
+
+# Cloud CVE/threat check-in integration
+cloud:
+  enabled: false
+  endpoint: ""  # Example: https://security-api.example.com/ingest/runtime
+  api_key_env: "CVE_CLOUD_API_KEY"
+
+
+# AI detection settings
+ai_detection:
+  static_pretrained_model: "logistic_v1"
+  runtime_pretrained_model: "anomaly_v1"
+
+
+# Runtime vulnerability monitoring for running container images
+vulnerability_monitoring:
+  enabled: true
+  image_scan_cache_ttl_seconds: 900
