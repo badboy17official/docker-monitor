@@ -1,0 +1,305 @@
+version: "3.9"
+
+services:
+  # =====================================================================
+  # INFRASTRUCTURE
+  # =====================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: devsecops-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - devsecops-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: devsecops-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+    networks:
+      - devsecops-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: devsecops-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 15s
+      retries: 10
+    networks:
+      - devsecops-net
+
+  # =====================================================================
+  # MICROSERVICES
+  # =====================================================================
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: devsecops-auth-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGO: ${JWT_ALGO}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS}
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8001"
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: devsecops-api-gateway
+    depends_on:
+      - auth-service
+      - redis
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:8001
+      SCAN_ORCHESTRATOR_URL: http://scan-orchestrator:8002
+      AI_ENGINE_URL: http://ai-engine:8003
+      REPORT_SERVICE_URL: http://report-service:8004
+      DASHBOARD_BACKEND_URL: http://dashboard-backend:8005
+    ports:
+      - "8000:8000"
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  scan-orchestrator:
+    build:
+      context: ./services/scan-orchestrator
+      dockerfile: Dockerfile
+    container_name: devsecops-scan-orchestrator
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: ${REDIS_URL}
+    ports:
+      - "8002:8002"
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  ai-engine:
+    build:
+      context: ./services/ai-engine
+      dockerfile: Dockerfile
+    container_name: devsecops-ai-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: ${REDIS_URL}
+    ports:
+      - "8003:8003"
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  report-service:
+    build:
+      context: ./services/report-service
+      dockerfile: Dockerfile
+    container_name: devsecops-report-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8004:8004"
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  dashboard-backend:
+    build:
+      context: ./services/dashboard-backend
+      dockerfile: Dockerfile
+    container_name: devsecops-dashboard-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      ES_URL: http://elasticsearch:9200
+    ports:
+      - "8005:8005"
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  runtime-monitor:
+    build:
+      context: ./services/runtime-monitor
+      dockerfile: Dockerfile
+    container_name: devsecops-runtime-monitor
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  # =====================================================================
+  # SCANNER WORKERS (horizontal scaling: replicas)
+  # =====================================================================
+
+  trivy-worker-1:
+    build:
+      context: ./services/scanner-workers/trivy-worker
+      dockerfile: Dockerfile
+    container_name: devsecops-trivy-worker-1
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      TRIVY_TIMEOUT: ${TRIVY_TIMEOUT}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - trivy_cache:/tmp/trivy-cache
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  dockle-worker-1:
+    build:
+      context: ./services/scanner-workers/dockle-worker
+      dockerfile: Dockerfile
+    container_name: devsecops-dockle-worker-1
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DOCKLE_TIMEOUT: ${DOCKLE_TIMEOUT}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  # =====================================================================
+  # MONITORING
+  # =====================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    container_name: devsecops-prometheus
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: devsecops-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+  # =====================================================================
+  # FRONTEND
+  # =====================================================================
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    container_name: devsecops-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    environment:
+      REACT_APP_API_URL: http://localhost:8000/api/v1
+    networks:
+      - devsecops-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  es_data:
+  trivy_cache:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  devsecops-net:
+    driver: bridge

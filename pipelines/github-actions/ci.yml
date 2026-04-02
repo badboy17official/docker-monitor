@@ -1,0 +1,131 @@
+# GitHub Actions CI Pipeline
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: devsecops_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies (Auth Service)
+      run: |
+        pip install -r services/auth-service/requirements.txt
+        pip install pytest pytest-cov pytest-asyncio
+
+    - name: Run auth service tests
+      run: pytest services/auth-service/tests/ -v --cov --cov-report=xml
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: pip install black isort pylint
+
+    - name: Check formatting
+      run: black --check services/
+
+    - name: Check imports
+      run: isort --check-only services/
+
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build images for scanning
+      run: |
+        docker build -t devsecops/api-gateway:ci services/api-gateway/
+        docker build -t devsecops/auth-service:ci services/auth-service/
+
+    - name: Run Trivy image scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'devsecops/api-gateway:ci'
+        format: 'sarif'
+        output: 'api-gateway-scan.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'api-gateway-scan.sarif'
+
+  build:
+    needs: [test, lint, scan]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push API Gateway
+      uses: docker/build-push-action@v4
+      with:
+        context: ./services/api-gateway
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/devsecops-api-gateway:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/devsecops-api-gateway:latest
+
+    - name: Build and push Auth Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./services/auth-service
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/devsecops-auth-service:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/devsecops-auth-service:latest
