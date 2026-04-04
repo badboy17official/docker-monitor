@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Security](https://img.shields.io/badge/Security-Audit-red?style=for-the-badge)](https://github.com/badboy17official/docker-monitor)
 [![Trivy](https://img.shields.io/badge/Trivy-Scanner-blue?style=for-the-badge)](https://github.com/aquasecurity/trivy)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 
 > **Enterprise-grade DevSecOps platform for teaching Docker security through automated vulnerability scanning and hardening demonstrations**
 
@@ -59,6 +59,7 @@ ContainerSecurityAudit/
 ├── .gitlab-ci.yml                 # NEW: GitLab CI pipeline
 ├── Dockerfile.vuln                # Insecure Dockerfile
 ├── Dockerfile.hardened            # Security-hardened Dockerfile
+├── LICENSE                        # GNU GPL v3 license
 ├── .dockerignore                  # Prevents secret inclusion
 ├── requirements.txt               # Python dependencies
 ├── IMPROVEMENTS.md                # NEW: v2.0 enhancements documentation
@@ -118,19 +119,23 @@ python audit.py
 
 ### Option 2: Web Dashboard (NEW! ⭐)
 ```bash
-cd dashboard
-python app.py
+python dashboard/app.py
 # Open: http://localhost:8080
 ```
 
 ### Option 3: Docker Compose (NEW! ⭐)
 ```bash
+# Configure dashboard auth (required for control operations)
+export DASHBOARD_AUTH_USER=admin
+export DASHBOARD_AUTH_PASSWORD='change-this-password'
+
 docker-compose up -d
 
 # Access services:
 # - Vulnerable app: http://localhost:5001
 # - Hardened app: http://localhost:5002
 # - Dashboard: http://localhost:8080
+# Dashboard prompts for HTTP Basic auth set via DASHBOARD_AUTH_USER/PASSWORD
 
 docker-compose down
 ```
@@ -182,6 +187,7 @@ kubectl get all -n flask-hardened
 - Live tool status (Docker, Trivy, Dockle)
 - Running container list + restart/stop actions
 - Inline operation logs for operator visibility
+- HTTP Basic authentication for control endpoints (`DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD`)
 - Modern cybersecurity UI with neon-glass style and dark/light theme toggle
 
 
@@ -239,7 +245,7 @@ python audit.py
 
 ### View Dashboard
 ```bash
-cd dashboard && python app.py
+python dashboard/app.py
 # Navigate to: http://localhost:8080
 ```
 
@@ -378,7 +384,7 @@ Contributions welcome! Areas for enhancement:
 
 ## 📄 License
 
-MIT License - Free for educational and commercial use
+GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE).
 
 ---
 
@@ -391,6 +397,7 @@ Made with ❤️ for DevSecOps teams
 ```bash
 # From dashboard button, or API:
 curl -X POST http://localhost:8080/api/control-panel/report/runtime \
+  -u "$DASHBOARD_AUTH_USER:$DASHBOARD_AUTH_PASSWORD" \
   -H "Content-Type: application/json" \
   -d "{\"format\":\"json\"}"
 ```

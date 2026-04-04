@@ -89,13 +89,13 @@ dockle --version
 
 ### For the Flask App
 ```bash
-cd /home/DeAd_SeC/Downloads/project
+cd /home/DeAd_SeC/Downloads/Docker\ DUCK
 pip install Flask==3.0.0 Werkzeug==3.0.1
 ```
 
 Or if using the app directory:
 ```bash
-cd /home/DeAd_SeC/Downloads/project/app
+cd /home/DeAd_SeC/Downloads/Docker\ DUCK/app
 pip install -r requirements.txt
 ```
 
@@ -106,7 +106,7 @@ pip install -r requirements.txt
 Run this single command to install everything:
 
 ```bash
-cd /home/DeAd_SeC/Downloads/project && bash setup_real_environment.sh
+cd /home/DeAd_SeC/Downloads/Docker\ DUCK && bash setup_real_environment.sh
 ```
 
 ---
@@ -135,7 +135,7 @@ python3 -c "import flask; print(f'Flask {flask.__version__}')"
 Once everything is installed:
 
 ```bash
-cd /home/DeAd_SeC/Downloads/project
+cd /home/DeAd_SeC/Downloads/Docker\ DUCK
 python3 audit.py
 ```
 

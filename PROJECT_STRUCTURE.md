@@ -275,7 +275,7 @@ This is an educational project. Contributions welcome:
 
 ## ⚖️ License
 
-MIT License - For educational purposes only  
+GNU General Public License v3.0 (GPL-3.0). See `LICENSE`.  
 **Warning:** The vulnerable Dockerfile is intentionally insecure. Never use in production!
 
 ---

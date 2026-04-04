@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import statistics
 import subprocess
 import time
@@ -78,16 +79,18 @@ class VulnerabilityScanner:
 
     @staticmethod
     def _tool_exists() -> bool:
-        return any(Path(p).exists() for p in ["/usr/bin/trivy", "/usr/local/bin/trivy"]) or bool(
-            __import__("shutil").which("trivy")
-        )
+        return any(Path(p).exists() for p in ["/usr/bin/trivy", "/usr/local/bin/trivy"]) or bool(shutil.which("trivy"))
 
     def _run_trivy(self, image: str) -> Dict[str, Any]:
         if not self.enabled or not self._tool_exists():
             return {"critical": 0, "high": 0, "top_cves": [], "recommended_fixes": [], "scanner": "unavailable"}
 
-        cmd = f"trivy image --format json --quiet {image}"
-        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        proc = subprocess.run(
+            ["trivy", "image", "--format", "json", "--quiet", image],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if proc.returncode != 0 or not proc.stdout.strip():
             return {"critical": 0, "high": 0, "top_cves": [], "recommended_fixes": [], "scanner": "error"}
 

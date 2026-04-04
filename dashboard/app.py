@@ -1,43 +1,130 @@
-"""
-Security Audit Dashboard
-A Flask-based web interface to visualize container security audit results
-"""
+"""Security Audit Dashboard web application."""
 
-from flask import Flask, render_template, jsonify, send_file, request
+from __future__ import annotations
+
 import json
-from pathlib import Path
-import sys
-from datetime import datetime
+import os
+import re
 import shutil
 import subprocess
+import sys
+from datetime import datetime
+from functools import wraps
+from hmac import compare_digest
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from flask import Flask, jsonify, render_template, request, send_file
+
+
+DASHBOARD_DIR = Path(__file__).resolve().parent
+
+
+def detect_project_root() -> Path:
+    """Detect project root across local and containerized execution."""
+    candidates: List[Path] = []
+
+    env_root = os.getenv("PROJECT_ROOT")
+    if env_root:
+        candidates.append(Path(env_root).expanduser().resolve())
+
+    candidates.extend([
+        DASHBOARD_DIR.parent.resolve(),
+        DASHBOARD_DIR.resolve(),
+        Path.cwd().resolve(),
+    ])
+
+    for candidate in candidates:
+        if (candidate / "audit.py").exists() and (candidate / "realtime_threat_engine.py").exists():
+            return candidate
+
+    raise RuntimeError(
+        "Unable to detect project root. Set PROJECT_ROOT to the directory containing "
+        "audit.py and realtime_threat_engine.py"
+    )
+
+
+PROJECT_ROOT = detect_project_root()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from realtime_threat_engine import RuntimeThreatEngine
 
-app = Flask(__name__)
+
+app = Flask(__name__, template_folder=str(DASHBOARD_DIR / "templates"))
 
 REPORTS_DIR = PROJECT_ROOT / "reports"
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
+AI_MODEL_FILE = PROJECT_ROOT / "ai_security_model.py"
+CONTAINER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+REPORTS_DIR.mkdir(exist_ok=True)
+RUNTIME_DIR.mkdir(exist_ok=True)
+
+CONTROL_USER = os.getenv("DASHBOARD_AUTH_USER", "")
+CONTROL_PASSWORD = os.getenv("DASHBOARD_AUTH_PASSWORD", "")
+CONTROL_AUTH_ENABLED = bool(CONTROL_USER and CONTROL_PASSWORD)
 
 
-def run_shell(command, cwd=PROJECT_ROOT):
-    """Run a shell command and return completed process."""
-    return subprocess.run(command, cwd=cwd, shell=True, capture_output=True, text=True)
+def run_command(
+    command: List[str],
+    cwd: Path = PROJECT_ROOT,
+    env_overrides: Optional[Dict[str, str]] = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a command safely with shell disabled."""
+    env = os.environ.copy()
+    if env_overrides:
+        env.update(env_overrides)
+
+    return subprocess.run(
+        command,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
 
 
-def list_containers():
-    """Return a list of active Docker containers using docker CLI."""
+def _unauthorized_response():
+    return (
+        jsonify({"success": False, "error": "Authentication required for dashboard control actions"}),
+        401,
+        {"WWW-Authenticate": 'Basic realm="Docker Security Dashboard"'},
+    )
+
+
+def _is_authorized() -> bool:
+    if not CONTROL_AUTH_ENABLED:
+        return True
+
+    auth = request.authorization
+    if not auth or (auth.type or "").lower() != "basic":
+        return False
+
+    return compare_digest(auth.username or "", CONTROL_USER) and compare_digest(auth.password or "", CONTROL_PASSWORD)
+
+
+def require_dashboard_auth(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if _is_authorized():
+            return view_func(*args, **kwargs)
+        return _unauthorized_response()
+
+    return wrapper
+
+
+def list_containers() -> List[Dict[str, Any]]:
+    """Return active Docker containers using docker CLI."""
     if not shutil.which("docker"):
         return []
 
-    result = run_shell("docker ps --format '{{json .}}'")
+    result = run_command(["docker", "ps", "--format", "{{json .}}"])
     if result.returncode != 0:
         return []
 
-    containers = []
+    containers: List[Dict[str, Any]] = []
     for line in result.stdout.splitlines():
         line = line.strip()
         if not line:
@@ -49,13 +136,13 @@ def list_containers():
     return containers
 
 
-def tool_status():
-    """Collect available security tool statuses."""
+def tool_status() -> Dict[str, bool]:
+    """Collect available security tool status."""
     tools = ["docker", "trivy", "dockle", "syft", "grype", "python"]
     return {tool: bool(shutil.which(tool)) for tool in tools}
 
 
-def runtime_engine_instance():
+def runtime_engine_instance() -> RuntimeThreatEngine:
     """Create runtime engine instance for on-demand report generation."""
     return RuntimeThreatEngine(config_path=str(PROJECT_ROOT / "config.yaml"))
 
@@ -69,35 +156,35 @@ def runtime_summary_by_container(name: str):
 
 
 def load_latest_report():
-    """Load the most recent audit report"""
+    """Load the latest audit report from history."""
     history_file = REPORTS_DIR / "audit_history.json"
-    
+
     if history_file.exists():
-        with open(history_file, 'r') as f:
+        with open(history_file, "r", encoding="utf-8") as f:
             history = json.load(f)
             if history:
                 return history[-1]
-    
+
     return None
 
 
 def load_history():
-    """Load all historical audit data"""
+    """Load complete historical audit data."""
     history_file = REPORTS_DIR / "audit_history.json"
-    
+
     if history_file.exists():
-        with open(history_file, 'r') as f:
+        with open(history_file, "r", encoding="utf-8") as f:
             return json.load(f)
-    
+
     return []
 
 
 def load_runtime_findings():
-    """Load latest runtime threat findings generated by runtime engine"""
+    """Load latest runtime threat findings."""
     runtime_file = RUNTIME_DIR / "runtime_threats_latest.json"
 
     if runtime_file.exists():
-        with open(runtime_file, 'r') as f:
+        with open(runtime_file, "r", encoding="utf-8") as f:
             return json.load(f)
 
     return {
@@ -107,155 +194,184 @@ def load_runtime_findings():
             "critical_alerts": 0,
             "high_alerts": 0,
             "medium_alerts": 0,
-            "low_alerts": 0
+            "low_alerts": 0,
         },
-        "findings": []
+        "findings": [],
     }
 
 
-@app.route('/')
+@app.route("/")
+@require_dashboard_auth
 def index():
-    """Main dashboard page"""
+    """Main dashboard page."""
     report = load_latest_report()
     runtime = load_runtime_findings()
-    return render_template('dashboard.html', report=report, runtime=runtime)
+    return render_template(
+        "dashboard.html",
+        report=report,
+        runtime=runtime,
+    )
 
 
-@app.route('/api/latest')
+@app.route("/api/latest")
 def api_latest():
-    """API endpoint for latest report"""
+    """API endpoint for latest report."""
     report = load_latest_report()
     if report:
         return jsonify(report)
     return jsonify({"error": "No reports available"}), 404
 
 
-@app.route('/api/history')
+@app.route("/api/history")
 def api_history():
-    """API endpoint for historical data"""
-    history = load_history()
-    return jsonify(history)
+    """API endpoint for historical data."""
+    return jsonify(load_history())
 
 
-@app.route('/api/trends')
+@app.route("/api/trends")
 def api_trends():
-    """API endpoint for trend analysis"""
+    """API endpoint for trend analysis."""
     history = load_history()
-    
+
     if not history:
         return jsonify({"error": "No historical data"}), 404
-    
+
     trends = {
         "dates": [],
         "vulnerable_size": [],
         "hardened_size": [],
         "vulnerable_vulns": [],
-        "hardened_vulns": []
+        "hardened_vulns": [],
     }
-    
+
     for entry in history:
-        timestamp = entry.get('timestamp', '')
+        timestamp = entry.get("timestamp", "")
         if timestamp:
-            trends["dates"].append(timestamp[:10])  # Just date part
-        
-        comp = entry.get('comparison', {})
-        trends["vulnerable_size"].append(float(comp.get('size_vulnerable_mb', 0)))
-        trends["hardened_size"].append(float(comp.get('size_hardened_mb', 0)))
-        trends["vulnerable_vulns"].append(comp.get('vuln_vulnerable', 0))
-        trends["hardened_vulns"].append(comp.get('vuln_hardened', 0))
-    
+            trends["dates"].append(timestamp[:10])
+
+        comp = entry.get("comparison", {})
+        trends["vulnerable_size"].append(float(comp.get("size_vulnerable_mb", 0)))
+        trends["hardened_size"].append(float(comp.get("size_hardened_mb", 0)))
+        trends["vulnerable_vulns"].append(comp.get("vuln_vulnerable", 0))
+        trends["hardened_vulns"].append(comp.get("vuln_hardened", 0))
+
     return jsonify(trends)
 
 
-@app.route('/api/runtime-threats')
+@app.route("/api/runtime-threats")
 def api_runtime_threats():
-    """API endpoint for latest runtime threat findings"""
+    """API endpoint for latest runtime threat findings."""
     return jsonify(load_runtime_findings())
 
 
-@app.route('/api/control-panel/status')
+@app.route("/api/control-panel/status")
+@require_dashboard_auth
 def api_control_panel_status():
     """Control panel status summary for security tooling and outputs."""
     runtime_file = RUNTIME_DIR / "runtime_threats_latest.json"
     runtime_exists = runtime_file.exists()
-    return jsonify({
-        "timestamp": datetime.now().isoformat(),
-        "tools": tool_status(),
-        "runtime_output_exists": runtime_exists,
-        "runtime_output_path": str(runtime_file),
-        "runtime_generated_at": load_runtime_findings().get("generated_at") if runtime_exists else None,
-        "containers_running": len(list_containers()),
-        "ai_model_loaded": Path("../ai_security_model.py").exists(),
-        "vuln_monitor_enabled": True
-    })
+    return jsonify(
+        {
+            "timestamp": datetime.now().isoformat(),
+            "tools": tool_status(),
+            "runtime_output_exists": runtime_exists,
+            "runtime_output_path": str(runtime_file),
+            "runtime_generated_at": load_runtime_findings().get("generated_at") if runtime_exists else None,
+            "containers_running": len(list_containers()),
+            "ai_model_loaded": AI_MODEL_FILE.exists(),
+            "vuln_monitor_enabled": True,
+            "control_auth_enabled": CONTROL_AUTH_ENABLED,
+        }
+    )
 
 
-@app.route('/api/control-panel/containers')
+@app.route("/api/control-panel/containers")
+@require_dashboard_auth
 def api_control_panel_containers():
     """List running containers for control panel management."""
     return jsonify({"containers": list_containers()})
 
 
-@app.route('/api/control-panel/runtime/snapshot', methods=['POST'])
+@app.route("/api/control-panel/runtime/snapshot", methods=["POST"])
+@require_dashboard_auth
 def api_control_panel_runtime_snapshot():
     """Trigger a one-shot runtime threat snapshot."""
-    cmd = "RUNTIME_MONITOR_MODE=once python realtime_threat_engine.py"
-    result = run_shell(cmd)
-    return jsonify({
-        "success": result.returncode == 0,
-        "command": cmd,
-        "stdout": result.stdout[-2000:],
-        "stderr": result.stderr[-2000:],
-        "exit_code": result.returncode
-    }), (200 if result.returncode == 0 else 500)
+    command = [sys.executable, "realtime_threat_engine.py"]
+    result = run_command(command, env_overrides={"RUNTIME_MONITOR_MODE": "once"})
+    return (
+        jsonify(
+            {
+                "success": result.returncode == 0,
+                "command": " ".join(command),
+                "stdout": result.stdout[-2000:],
+                "stderr": result.stderr[-2000:],
+                "exit_code": result.returncode,
+            }
+        ),
+        200 if result.returncode == 0 else 500,
+    )
 
 
-@app.route('/api/control-panel/audit/run', methods=['POST'])
+@app.route("/api/control-panel/audit/run", methods=["POST"])
+@require_dashboard_auth
 def api_control_panel_run_audit():
     """Trigger a security audit run from the control panel."""
-    cmd = "python audit.py"
-    result = run_shell(cmd)
-    return jsonify({
-        "success": result.returncode == 0,
-        "command": cmd,
-        "stdout": result.stdout[-3000:],
-        "stderr": result.stderr[-3000:],
-        "exit_code": result.returncode
-    }), (200 if result.returncode == 0 else 500)
+    command = [sys.executable, "audit.py"]
+    result = run_command(command)
+    return (
+        jsonify(
+            {
+                "success": result.returncode == 0,
+                "command": " ".join(command),
+                "stdout": result.stdout[-3000:],
+                "stderr": result.stderr[-3000:],
+                "exit_code": result.returncode,
+            }
+        ),
+        200 if result.returncode == 0 else 500,
+    )
 
 
-@app.route('/api/control-panel/container-action', methods=['POST'])
+@app.route("/api/control-panel/container-action", methods=["POST"])
+@require_dashboard_auth
 def api_control_panel_container_action():
     """Apply start/stop/restart actions to a container."""
     data = request.get_json(silent=True) or {}
-    container = data.get("container")
+    container = (data.get("container") or "").strip()
     action = data.get("action")
 
     if action not in {"start", "stop", "restart"}:
         return jsonify({"success": False, "error": "Invalid action"}), 400
     if not container:
         return jsonify({"success": False, "error": "Container is required"}), 400
+    if not CONTAINER_NAME_RE.fullmatch(container):
+        return jsonify({"success": False, "error": "Invalid container name"}), 400
 
-    cmd = f"docker {action} {container}"
-    result = run_shell(cmd)
-    return jsonify({
-        "success": result.returncode == 0,
-        "container": container,
-        "action": action,
-        "stdout": result.stdout[-2000:],
-        "stderr": result.stderr[-2000:],
-        "exit_code": result.returncode
-    }), (200 if result.returncode == 0 else 500)
+    command = ["docker", action, container]
+    result = run_command(command)
+    return (
+        jsonify(
+            {
+                "success": result.returncode == 0,
+                "container": container,
+                "action": action,
+                "stdout": result.stdout[-2000:],
+                "stderr": result.stderr[-2000:],
+                "exit_code": result.returncode,
+            }
+        ),
+        200 if result.returncode == 0 else 500,
+    )
 
 
-@app.route('/api/runtime-threats/alerts')
+@app.route("/api/runtime-threats/alerts")
 def api_runtime_alerts():
     """Only high-priority runtime alerts with CVE+fix context."""
     runtime = load_runtime_findings()
     return jsonify(runtime.get("alerts", []))
 
 
-@app.route('/api/runtime-threats/container/<name>')
+@app.route("/api/runtime-threats/container/<name>")
 def api_runtime_container_detail(name):
     """Container-level runtime detail including CVEs and suggested fixes."""
     item = runtime_summary_by_container(name)
@@ -264,7 +380,8 @@ def api_runtime_container_detail(name):
     return jsonify({"error": "container not found"}), 404
 
 
-@app.route('/api/control-panel/report/runtime', methods=['POST'])
+@app.route("/api/control-panel/report/runtime", methods=["POST"])
+@require_dashboard_auth
 def api_control_panel_runtime_report():
     """Generate runtime security report on-demand (json/txt)."""
     payload = request.get_json(silent=True) or {}
@@ -284,31 +401,38 @@ def api_control_panel_runtime_report():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
-@app.route('/reports/<filename>')
+@app.route("/reports/<path:filename>")
+@require_dashboard_auth
 def download_report(filename):
-    """Download specific report file"""
-    filepath = REPORTS_DIR / filename
-    if filepath.exists():
-        return send_file(filepath, as_attachment=True)
-    return jsonify({"error": "File not found"}), 404
+    """Download report files from reports directory only."""
+    reports_root = REPORTS_DIR.resolve()
+    requested = (reports_root / filename).resolve()
+
+    if reports_root not in requested.parents or not requested.is_file():
+        return jsonify({"error": "File not found"}), 404
+
+    return send_file(requested, as_attachment=True)
 
 
-@app.route('/health')
+@app.route("/health")
 def health():
-    """Health check endpoint"""
+    """Health check endpoint."""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
 
-if __name__ == '__main__':
-    # Create reports directory if it doesn't exist
+if __name__ == "__main__":
     REPORTS_DIR.mkdir(exist_ok=True)
     RUNTIME_DIR.mkdir(exist_ok=True)
-    
+
     print("=" * 70)
-    print("🔒 Container Security Audit Dashboard")
+    print("Container Security Audit Dashboard")
     print("=" * 70)
-    print(f"📊 Dashboard URL: http://localhost:8080")
-    print(f"📁 Reports Directory: {REPORTS_DIR.absolute()}")
+    print("Dashboard URL: http://localhost:8080")
+    print(f"Project Root: {PROJECT_ROOT}")
+    print(f"Reports Directory: {REPORTS_DIR.resolve()}")
+    print(f"Control Authentication: {'enabled' if CONTROL_AUTH_ENABLED else 'disabled'}")
     print("=" * 70)
-    
-    app.run(host='0.0.0.0', port=8080, debug=True)
+
+    port = int(os.getenv("PORT", "8080"))
+    debug_enabled = os.getenv("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug_enabled)

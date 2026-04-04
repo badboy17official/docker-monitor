@@ -43,6 +43,7 @@ audit_report.txt
 # OS
 .DS_Store
 Thumbs.db
+.codex
 
 # Secrets
 *.pem

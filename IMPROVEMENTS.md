@@ -64,6 +64,7 @@ This document describes the major enhancements made to elevate the project to pr
 ### 5. **Web Dashboard** ✅
 - **Location**: `dashboard/`
 - **Features**:
+  - HTTP Basic auth protection for control-panel endpoints
   - Real-time visualization of audit results
   - Interactive charts (Chart.js)
   - Beautiful gradient UI design
@@ -160,12 +161,14 @@ python audit.py --config config.yaml
 
 ### 2. View Dashboard
 ```bash
-cd dashboard && python app.py
+python dashboard/app.py
 # Open http://localhost:8080
 ```
 
 ### 3. Run with Docker Compose
 ```bash
+export DASHBOARD_AUTH_USER=admin
+export DASHBOARD_AUTH_PASSWORD='change-this-password'
 docker-compose up -d
 # Vulnerable: http://localhost:5001
 # Hardened: http://localhost:5002

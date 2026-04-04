@@ -1,28 +1,37 @@
-FROM python:3.11-slim
+FROM python:3.11.9-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir flask
+COPY requirements.txt /app/requirements.txt
+COPY dashboard/requirements.txt /app/dashboard/requirements.txt
 
-# Create non-root user
-RUN useradd -m -u 1000 dashboard && \
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /app/requirements.txt -r /app/dashboard/requirements.txt
+
+RUN useradd -m -u 1000 dashboard
+
+COPY ai_security_model.py /app/ai_security_model.py
+COPY audit.py /app/audit.py
+COPY realtime_threat_engine.py /app/realtime_threat_engine.py
+COPY report_generator.py /app/report_generator.py
+COPY config.yaml /app/config.yaml
+COPY Dockerfile.vuln /app/Dockerfile.vuln
+COPY Dockerfile.hardened /app/Dockerfile.hardened
+COPY app /app/app
+COPY dashboard /app/dashboard
+
+RUN mkdir -p /app/reports /app/runtime && \
     chown -R dashboard:dashboard /app
 
-# Copy application
-COPY app.py .
-COPY templates/ templates/
-
-# Switch to non-root user
 USER dashboard
+WORKDIR /app/dashboard
 
-# Expose port
 EXPOSE 8080
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health').read()" || exit 1
 
-# Run application
 CMD ["python", "app.py"]

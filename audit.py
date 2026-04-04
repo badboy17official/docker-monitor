@@ -10,7 +10,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List
 
 from ai_security_model import PretrainedRiskModel
 
@@ -48,8 +48,8 @@ def print_error(message: str):
     print(f"{Colors.FAIL}[✗]{Colors.ENDC} {message}")
 
 
-def run_command(command: str) -> subprocess.CompletedProcess:
-    return subprocess.run(command, shell=True, capture_output=True, text=True)
+def run_command(command: List[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, capture_output=True, text=True, check=False)
 
 
 def check_tool_installed(tool_name: str) -> bool:
@@ -58,7 +58,7 @@ def check_tool_installed(tool_name: str) -> bool:
 
 def build_docker_image(dockerfile_path: str, image_name: str) -> bool:
     print_info(f"Building image: {image_name}")
-    result = run_command(f'docker build -t {image_name} -f "{dockerfile_path}" .')
+    result = run_command(["docker", "build", "-t", image_name, "-f", dockerfile_path, "."])
     if result.returncode == 0:
         print_success(f"Successfully built: {image_name}")
         return True
@@ -81,8 +81,7 @@ def scan_trivy(image_name: str, output_file: str) -> Dict[str, int]:
         print_warning("Trivy not found")
         return {"critical": 0, "high": 0, "medium": 0, "low": 0, "engine_enabled": 0}
 
-    cmd = f"trivy image --format json {image_name}"
-    result = run_command(cmd)
+    result = run_command(["trivy", "image", "--format", "json", image_name])
     _append_report(output_file, f"Trivy - {image_name}", result.stdout, result.stderr)
     if result.returncode != 0 or not result.stdout.strip():
         return {"critical": 0, "high": 0, "medium": 0, "low": 0, "engine_enabled": 1}
@@ -108,7 +107,7 @@ def scan_dockle(image_name: str, output_file: str) -> Dict[str, int]:
         print_warning("Dockle not found")
         return {"fatal": 0, "warn": 0, "engine_enabled": 0}
 
-    result = run_command(f"dockle -f json {image_name}")
+    result = run_command(["dockle", "-f", "json", image_name])
     _append_report(output_file, f"Dockle - {image_name}", result.stdout, result.stderr)
 
     fatal = warn = 0
@@ -130,7 +129,7 @@ def scan_syft(image_name: str, output_file: str) -> Dict[str, int]:
     if not check_tool_installed("syft"):
         print_warning("Syft not found")
         return {"packages": 0, "engine_enabled": 0}
-    result = run_command(f"syft {image_name} -o json")
+    result = run_command(["syft", image_name, "-o", "json"])
     _append_report(output_file, f"Syft SBOM - {image_name}", result.stdout, result.stderr)
     if result.returncode != 0:
         return {"packages": 0, "engine_enabled": 1}
@@ -146,7 +145,7 @@ def scan_grype(image_name: str, output_file: str) -> Dict[str, int]:
         print_warning("Grype not found")
         return {"critical": 0, "high": 0, "medium": 0, "low": 0, "engine_enabled": 0}
 
-    result = run_command(f"grype {image_name} -o json")
+    result = run_command(["grype", image_name, "-o", "json"])
     _append_report(output_file, f"Grype - {image_name}", result.stdout, result.stderr)
     if result.returncode != 0 or not result.stdout.strip():
         return {"critical": 0, "high": 0, "medium": 0, "low": 0, "engine_enabled": 1}
