@@ -6,7 +6,7 @@
 FROM python:3.11.6-slim-bookworm
 
 # Add metadata labels
-LABEL maintainer="devsecops@example.com"
+LABEL maintainer="noble17@duck.com"
 LABEL description="Hardened Flask application container"
 LABEL version="1.0.0"
 

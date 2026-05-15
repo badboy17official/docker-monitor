@@ -150,7 +150,7 @@ deploy:production:
   when: manual
   environment:
     name: production
-    url: https://example.com
+    url: "http://localhost:8080"  # TODO: replace with real URL :D
   dependencies:
     - report:generate
   needs:
