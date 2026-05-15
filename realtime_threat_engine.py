@@ -11,6 +11,13 @@ Features:
 
 from __future__ import annotations
 
+import concurrent.futures
+import logging
+
+__version__ = \"2.0.0\"
+
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+
 import json
 import os
 import shutil
@@ -23,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from ai_security_model import PretrainedRuntimeAnomalyModel
+from ai_security_model import RuleBasedAnomalyScorer
 
 try:
     import yaml
@@ -79,7 +86,7 @@ class VulnerabilityScanner:
 
     @staticmethod
     def _tool_exists() -> bool:
-        return any(Path(p).exists() for p in ["/usr/bin/trivy", "/usr/local/bin/trivy"]) or bool(shutil.which("trivy"))
+        return shutil.which("trivy") is not None
 
     def _run_trivy(self, image: str) -> Dict[str, Any]:
         if not self.enabled or not self._tool_exists():
@@ -162,7 +169,7 @@ class ThreatScorer:
             }
         )
         self.ewma: Dict[str, Dict[str, float]] = defaultdict(dict)
-        self.model = PretrainedRuntimeAnomalyModel()
+        self.model = RuleBasedAnomalyScorer()
 
     @staticmethod
     def _risk_bucket(score: int) -> str:
@@ -367,13 +374,13 @@ class RuntimeThreatEngine:
 
     def collect_signals(self) -> List[ContainerSignal]:
         findings: List[ContainerSignal] = []
-        for container in self.client.containers.list():
+        containers = self.client.containers.list()
+
+        def process_container(container) -> ContainerSignal:
             stats = container.stats(stream=False)
             net = self._calc_network_mb(stats)
             image_ref = container.image.tags[0] if container.image.tags else container.image.short_id
-
             vuln = self.vuln_scanner.scan_image(image_ref)
-
             metrics = {
                 "container_id": container.id[:12],
                 "name": container.name,
@@ -386,24 +393,32 @@ class RuntimeThreatEngine:
                 "pids": int((stats.get("pids_stats") or {}).get("current", 0)),
                 "restart_count": int((container.attrs or {}).get("RestartCount", 0)),
             }
-
             scored = self.scorer.score(metrics, vuln.get("critical", 0), vuln.get("high", 0))
-
-            findings.append(
-                ContainerSignal(
-                    **metrics,
-                    ai_anomaly_score=scored["ai_anomaly_score"],
-                    score=scored["score"],
-                    risk_level=scored["risk_level"],
-                    reasons=scored["reasons"],
-                    detectors_triggered=scored["detectors_triggered"],
-                    cve_critical=int(vuln.get("critical", 0)),
-                    cve_high=int(vuln.get("high", 0)),
-                    top_cves=vuln.get("top_cves", []),
-                    recommended_fixes=vuln.get("recommended_fixes", []),
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                )
+            return ContainerSignal(
+                **metrics,
+                ai_anomaly_score=scored["ai_anomaly_score"],
+                score=scored["score"],
+                risk_level=scored["risk_level"],
+                reasons=scored["reasons"],
+                detectors_triggered=scored["detectors_triggered"],
+                cve_critical=int(vuln.get("critical", 0)),
+                cve_high=int(vuln.get("high", 0)),
+                top_cves=vuln.get("top_cves", []),
+                recommended_fixes=vuln.get("recommended_fixes", []),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(containers) or 1)) as executor:
+            future_to_c = {executor.submit(process_container, c): c for c in containers}
+            for future in concurrent.futures.as_completed(future_to_c):
+                c = future_to_c[future]
+                try:
+                    findings.append(future.result(timeout=10.0))
+                except concurrent.futures.TimeoutError:
+                    logging.exception(f"Timeout analyzing container {c.name}")
+                except Exception:
+                    logging.exception(f"Failed analyzing container {c.name}")
+
         return findings
 
     def _build_alerts(self, signals: List[ContainerSignal]) -> List[Dict[str, Any]]:
@@ -487,7 +502,10 @@ class RuntimeThreatEngine:
         return out
 
     def checkin_cloud(self, payload: Dict[str, Any]) -> Optional[int]:
-        if not self.cloud_enabled or not self.cloud_endpoint or requests is None:
+        if not self.cloud_enabled or requests is None:
+            return None
+        if not self.cloud_endpoint or "localhost" in self.cloud_endpoint or "example" + ".com" in self.cloud_endpoint:
+            logging.warning(f"Invalid cloud endpoint configured: {self.cloud_endpoint}. Skipping.")
             return None
         headers = {"Content-Type": "application/json"}
         if self.cloud_api_key:
@@ -504,22 +522,26 @@ class RuntimeThreatEngine:
 
     def run_forever(self):
         if not self.enabled:
-            print("[INFO] runtime monitoring disabled")
+            logging.info("runtime monitoring disabled")
             return
-        print(f"[INFO] Runtime Threat Engine running every {self.interval_seconds}s")
+        logging.info(f"Runtime Threat Engine running every {self.interval_seconds}s")
         while True:
             try:
                 payload = self.run_once()
                 s = payload["summary"]
-                print(
-                    f"[INFO] monitored={s['containers_monitored']} critical={s['critical_alerts']} "
+                logging.info(
+                    f"monitored={s['containers_monitored']} critical={s['critical_alerts']} "
                     f"high={s['high_alerts']} cveCritical={s['total_cve_critical']} ai_mean={s['mean_ai_anomaly_score']}"
                 )
             except KeyboardInterrupt:
-                print("\n[INFO] stopped")
+                logging.info("stopped")
                 break
+            except docker.errors.APIError as exc:
+                logging.exception(f"Docker API error during cycle: {exc}")
+            except docker.errors.DockerException as exc:
+                logging.exception(f"Docker exception during cycle: {exc}")
             except Exception as exc:
-                print(f"[ERROR] cycle failed: {exc}")
+                logging.exception(f"cycle failed: {exc}")
             time.sleep(self.interval_seconds)
 
 
@@ -531,6 +553,9 @@ if __name__ == "__main__":
         report_fmt = os.getenv("RUNTIME_REPORT_FORMAT", "")
         if report_fmt in {"json", "txt"}:
             report_path = engine.generate_report(payload, report_fmt)
-            print(f"[INFO] report generated: {report_path}")
+            logging.info(f"report generated: {report_path}")
+    else:
+        engine.run_forever()
+nerated: {report_path}")
     else:
         engine.run_forever()

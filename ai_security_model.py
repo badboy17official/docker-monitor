@@ -1,7 +1,7 @@
-"""Pretrained lightweight AI models for security scoring.
+"""Rule-based scoring models for security and anomaly detection.
 
-These are deterministic, pre-trained linear models encoded as weights so
-no training is required at runtime.
+These are deterministic weighted rule scorers. Not a trained ML model.
+Weights are empirically tuned heuristics.
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ import math
 from typing import Dict
 
 
-class PretrainedRiskModel:
-    """Logistic model with prefit weights for static scan risk scoring."""
+class RuleBasedRiskScorer:
+    """Deterministic weighted rule scorer for static scan risk scoring. Not a trained ML model. Weights are empirically tuned heuristics."""
 
     # Tuned offline; stored as constants (pre-trained model artifact)
     _WEIGHTS = {
@@ -36,8 +36,8 @@ class PretrainedRiskModel:
         return round(self._sigmoid(z) * 100, 2)
 
 
-class PretrainedRuntimeAnomalyModel:
-    """Prefit runtime anomaly model returning anomaly probability [0,100]."""
+class RuleBasedAnomalyScorer:
+    """Deterministic weighted rule scorer for runtime anomaly detection returning anomaly probability [0,100]. Not a trained ML model. Weights are empirically tuned heuristics."""
 
     _WEIGHTS = {
         "cpu": 0.04,
