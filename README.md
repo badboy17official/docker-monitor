@@ -312,6 +312,29 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code style, and PR guidelines.
 
 ---
 
+## Packaging for Distribution
+
+You can package the dashboard into a single executable using PyInstaller. This makes it easy to distribute to users who do not have Python or pip installed.
+
+**Build Command:**
+```bash
+./build.sh
+```
+
+**Usage:**
+After building, the executable will be located at `dist/cybersec-dashboard`. You can run it directly:
+```bash
+./dist/cybersec-dashboard
+```
+
+**Limitations/Workarounds:**
+- PyInstaller can sometimes struggle to correctly bundle dynamic native dependencies from libraries like `scikit-learn` or `numpy` depending on the host OS and libc versions.
+- The `build.sh` script explicitly adds several known hidden imports, but if you see `ImportError: ... sklearn ...` when running the binary, you may need to explicitly specify additional hidden imports in the build script.
+- The Docker SDK relies on the `docker` binary being present on the host system to function. The packaged executable does not bundle Docker itself.
+- Ensure that `config.yaml` is kept in the same directory as the executable, or edit the spec file to bundle it properly.
+
+---
+
 ## References
 
 - [Docker Security Best Practices](https://docs.docker.com/develop/security-best-practices/)
