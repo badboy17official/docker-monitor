@@ -14,7 +14,7 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 
-__version__ = \"2.0.0\"
+__version__ = "2.0.0"
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
@@ -475,6 +475,13 @@ class RuntimeThreatEngine:
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
 
+        try:
+            import db
+            for alert in payload.get("alerts", []):
+                db.save_runtime_event(alert)
+        except Exception as e:
+            logging.error(f"Failed to save runtime events to DB: {e}")
+
         return payload
 
     def generate_report(self, payload: Dict[str, Any], fmt: str = "json") -> Path:
@@ -559,8 +566,5 @@ if __name__ == "__main__":
         if report_fmt in {"json", "txt"}:
             report_path = engine.generate_report(payload, report_fmt)
             logging.info(f"report generated: {report_path}")
-    else:
-        engine.run_forever()
-nerated: {report_path}")
     else:
         engine.run_forever()

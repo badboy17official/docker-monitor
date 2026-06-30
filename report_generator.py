@@ -385,5 +385,11 @@ class ReportGenerator:
         
         with open(history_file, 'w') as f:
             json.dump(history, f, indent=2, default=str)
+            
+        try:
+            import db
+            db.save_audit(data)
+        except Exception as e:
+            print(f"Failed to save audit to DB: {e}")
         
         return history_file

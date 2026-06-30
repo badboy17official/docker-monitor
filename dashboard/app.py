@@ -186,9 +186,16 @@ def load_latest_report():
 
 
 def load_history():
-    """Load complete historical audit data."""
-    history_file = REPORTS_DIR / "audit_history.json"
+    """Load complete historical audit data from DB, falling back to JSON if empty."""
+    try:
+        import db
+        db_history = db.get_audit_history()
+        if db_history:
+            return db_history
+    except Exception:
+        pass
 
+    history_file = REPORTS_DIR / "audit_history.json"
     if history_file.exists():
         with open(history_file, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -244,6 +251,15 @@ def api_latest():
 def api_history():
     """API endpoint for historical data."""
     return jsonify(load_history())
+
+@app.route("/api/runtime-history")
+def api_runtime_history():
+    """API endpoint for runtime threat history from DB."""
+    try:
+        import db
+        return jsonify(db.get_runtime_history())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/trends")
