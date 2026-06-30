@@ -84,6 +84,37 @@ docker-monitor/
 
 The tool gracefully skips any scanner that isn't installed.
 
+### Required Tools Installation (Linux)
+
+To ensure the security scan uses all 4 available engines, install the required binaries on your host machine:
+
+**Debian/Ubuntu:**
+```bash
+# Trivy
+sudo apt-get install wget apt-transport-https gnupg lsb-release
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update && sudo apt-get install trivy
+
+# Dockle
+VERSION=$(curl --silent "https://api.github.com/repos/goodwithtech/dockle/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+wget https://github.com/goodwithtech/dockle/releases/download/v${VERSION}/dockle_${VERSION}_Linux-64bit.deb
+sudo dpkg -i dockle_${VERSION}_Linux-64bit.deb
+
+# Syft
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+# Grype
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S trivy syft grype
+# Dockle is available in the AUR
+yay -S dockle-bin
+```
+
 ---
 
 ## Quick Start
