@@ -36,3 +36,27 @@ def test_run_command_timeout(monkeypatch):
 
 def test_tool_check_nonexistent():
     assert check_tool_installed("nonexistent_tool_xyz") is False
+
+def test_cloud_cve_fetcher(monkeypatch):
+    from cloud_cve import CloudCVEFetcher
+    import requests
+    
+    class MockResponse:
+        status_code = 200
+        def json(self):
+            return {"vulns": [{"id": "CVE-2021-44228"}], "severity": [{"type": "CVSS_V3", "score": "CRITICAL"}]}
+            
+    def mock_get(*args, **kwargs):
+        return MockResponse()
+        
+    monkeypatch.setattr(requests, "get", mock_get)
+    fetcher = CloudCVEFetcher({"cloud": {"enabled": True}})
+    fetcher.cache_file = type('obj', (object,), {'exists': lambda: False, 'stat': lambda: type('obj', (object,), {'st_mtime': 0})})() # disable cache logic for test
+    # Monkeypatch the methods to avoid writing file
+    monkeypatch.setattr(fetcher, "_is_cache_stale", lambda: True)
+    monkeypatch.setattr(fetcher, "load_cache", lambda: {})
+    monkeypatch.setattr(fetcher, "save_cache", lambda d: None)
+    
+    result = fetcher.fetch_severity(["CVE-2021-44228"])
+    assert "CVE-2021-44228" in result
+    assert result["CVE-2021-44228"] == "CRITICAL"

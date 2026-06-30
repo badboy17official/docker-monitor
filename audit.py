@@ -173,6 +173,22 @@ def aggregate_scan(image_name: str, output_file: str) -> dict[str, Any]:
     t_cves = trivy.get("cves_by_severity", {"CRITICAL": set(), "HIGH": set(), "MEDIUM": set(), "LOW": set()})
     g_cves = grype.get("cves_by_severity", {"CRITICAL": set(), "HIGH": set(), "MEDIUM": set(), "LOW": set()})
 
+    all_cves = set()
+    for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+        all_cves.update(t_cves[sev])
+        all_cves.update(g_cves[sev])
+
+    try:
+        import yaml
+        from cloud_cve import CloudCVEFetcher
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+        fetcher = CloudCVEFetcher(config)
+        cloud_data = fetcher.fetch_severity(list(all_cves))
+    except Exception as e:
+        logger.error(f"Cloud CVE sync failed: {e}")
+        cloud_data = {}
+
     agg = {
         "critical": len(t_cves["CRITICAL"].union(g_cves["CRITICAL"])),
         "high": len(t_cves["HIGH"].union(g_cves["HIGH"])),
@@ -182,6 +198,7 @@ def aggregate_scan(image_name: str, output_file: str) -> dict[str, Any]:
         "warn": dockle["warn"],
         "packages": syft["packages"],
         "engines_active": trivy["engine_enabled"] + dockle["engine_enabled"] + syft["engine_enabled"] + grype["engine_enabled"],
+        "cloud_verified_cves": len(cloud_data),
     }
 
     model = RuleBasedRiskScorer()
