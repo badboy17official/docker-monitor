@@ -51,10 +51,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from realtime_threat_engine import RuntimeThreatEngine
 
 
+from flask import Flask, jsonify, render_template, request, send_file, session, redirect, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__, template_folder=str(DASHBOARD_DIR / "templates"))
+app.secret_key = os.getenv("SECRET_KEY", "cybersec-dev-secret-key-change-me")
 
 limiter = Limiter(
     get_remote_address,
@@ -104,6 +106,8 @@ def run_command(
 
 
 def _unauthorized_response():
+    if request.path == "/" or request.path.startswith("/reports/"):
+        return redirect(url_for("login"))
     return (
         jsonify({"success": False, "error": "Authentication required for dashboard control actions"}),
         401,
@@ -113,6 +117,9 @@ def _unauthorized_response():
 
 def _is_authorized() -> bool:
     if not CONTROL_AUTH_ENABLED:
+        return True
+        
+    if session.get("authenticated"):
         return True
 
     auth = request.authorization
@@ -130,6 +137,23 @@ def require_dashboard_auth(view_func):
         return _unauthorized_response()
 
     return wrapper
+
+@app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if compare_digest(username, CONTROL_USER) and compare_digest(password, CONTROL_PASSWORD):
+            session["authenticated"] = True
+            return redirect(url_for("index"))
+        return render_template("login.html", error="Invalid credentials")
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.pop("authenticated", None)
+    return redirect(url_for("login"))
 
 
 def list_containers() -> List[Dict[str, Any]]:

@@ -24,7 +24,8 @@ def test_dashboard_unauthorized(client):
     dashboard.app.CONTROL_PASSWORD = "password"
     
     rv = client.get('/')
-    assert rv.status_code == 401
+    assert rv.status_code == 302
+    assert "/login" in rv.location
 
 def test_dashboard_authorized(client):
     import base64
