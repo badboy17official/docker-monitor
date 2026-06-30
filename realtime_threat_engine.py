@@ -340,7 +340,17 @@ class RuntimeThreatEngine:
 
         if docker is None:
             raise RuntimeError("docker package is not installed. Install with: pip install docker")
-        self.client = docker.from_env()
+            
+        self.hosts = rt.get("hosts", ["unix://var/run/docker.sock"])
+        self.clients = []
+        for host in self.hosts:
+            try:
+                if host == "unix://var/run/docker.sock" or host == "local":
+                    self.clients.append(docker.from_env())
+                else:
+                    self.clients.append(docker.DockerClient(base_url=host))
+            except Exception as e:
+                logging.error(f"Failed to connect to docker host {host}: {e}")
 
     def _load_config(self) -> Dict[str, Any]:
         if not self.config_path.exists() or yaml is None:
@@ -382,7 +392,12 @@ class RuntimeThreatEngine:
 
     def collect_signals(self) -> List[ContainerSignal]:
         findings: List[ContainerSignal] = []
-        containers = self.client.containers.list()
+        containers = []
+        for client in self.clients:
+            try:
+                containers.extend(client.containers.list())
+            except Exception as e:
+                logging.error(f"Failed to list containers: {e}")
 
         def process_container(container) -> ContainerSignal:
             stats = container.stats(stream=False)

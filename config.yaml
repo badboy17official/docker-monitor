@@ -74,6 +74,8 @@ runtime_monitoring:
   poll_interval_seconds: 20
   max_events: 100
   ai_window_size: 12
+  hosts:
+    - "unix://var/run/docker.sock"
 
 # Cloud CVE/threat check-in integration
 cloud:
