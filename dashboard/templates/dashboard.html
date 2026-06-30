@@ -161,8 +161,13 @@
         <p>Real-time Docker threat telemetry, controls, and vulnerability intelligence.</p>
       </div>
       <div class="toolbar">
+        <a href="/logs" class="btn">View Logs</a>
         <button class="btn btn-tonal" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
         <button class="btn btn-filled" onclick="location.reload()">↻ Refresh</button>
+        <button class="btn btn-filled" onclick="runRuntimeSnapshot()">Snapshot Runtime</button>
+        <button class="btn btn-filled" onclick="generateRuntimeReport()">Generate Report</button>
+        <button class="action-btn" style="border-color: var(--bad); color: var(--bad);" onclick="runAuditNow()">Run Audit</button>
+        <a href="/logout" class="btn" style="margin-left: 16px;">Logout</a>
       </div>
     </header>
 

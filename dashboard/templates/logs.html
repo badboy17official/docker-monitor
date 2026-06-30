@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logs/Events - CyberSec Control Center</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --bg-soft: #0d1422;
+      --surface: rgba(13, 20, 34, 0.75);
+      --surface-2: rgba(15, 24, 40, 0.8);
+      --text: #dce8ff;
+      --muted: #8ea3c7;
+      --line: rgba(86, 121, 175, 0.35);
+      --accent: #15e4ff;
+      --accent-2: #7b61ff;
+      --good: #35f3a0;
+      --warn: #ffb020;
+      --bad: #ff5d7f;
+      --glow: 0 0 30px rgba(21, 228, 255, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(21, 228, 255, 0.16), transparent 30%),
+        radial-gradient(circle at 90% 0%, rgba(123, 97, 255, 0.22), transparent 30%),
+        linear-gradient(180deg, var(--bg-soft), var(--bg));
+      min-height: 100vh;
+    }
+
+    .container { max-width: 1500px; margin: 0 auto; padding: 24px; position: relative; z-index: 1; }
+
+    .topbar {
+      display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px 20px;
+      box-shadow: var(--glow);
+      backdrop-filter: blur(14px);
+      margin-bottom: 18px;
+    }
+
+    .title h1 { margin: 0; font-size: 1.55rem; letter-spacing: 0.4px; }
+    .title p { margin: 4px 0 0; color: var(--muted); }
+
+    .toolbar { display: flex; gap: 10px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(21,228,255,0.15), rgba(123,97,255,0.2));
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 650;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn:hover { box-shadow: var(--glow); }
+
+    .filters {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-end;
+    }
+    
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .filter-group label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    
+    .filter-group input {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+
+    table { width: 100%; border-collapse: collapse; background: var(--surface-2); border-radius: 16px; overflow: hidden; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { background: rgba(0,0,0,0.2); font-weight: 600; color: var(--muted); }
+    tr:hover { background: rgba(255,255,255,0.03); }
+    
+    .badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      background: rgba(255,255,255,0.1);
+    }
+    .badge.high { background: rgba(255, 93, 127, 0.2); color: var(--bad); border: 1px solid var(--bad); }
+    .badge.medium { background: rgba(255, 176, 32, 0.2); color: var(--warn); border: 1px solid var(--warn); }
+    .badge.low { background: rgba(53, 243, 160, 0.2); color: var(--good); border: 1px solid var(--good); }
+
+    .pagination {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="title">
+        <h1>Runtime Events Log</h1>
+        <p>Historical container threat telemetry</p>
+      </div>
+      <div class="toolbar">
+        <a href="/" class="btn">Back to Dashboard</a>
+      </div>
+    </div>
+
+    <form class="filters" method="GET" action="/logs">
+      <div class="filter-group">
+        <label>Container Name</label>
+        <input type="text" name="container" value="{{ container }}" placeholder="Name...">
+      </div>
+      <div class="filter-group">
+        <label>Min Anomaly Score</label>
+        <input type="number" name="min_score" value="{{ min_score }}" placeholder="0-100">
+      </div>
+      <button type="submit" class="btn">Filter</button>
+    </form>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Container</th>
+          <th>Risk Level</th>
+          <th>Score</th>
+          <th>AI Score</th>
+          <th>Critical CVEs</th>
+          <th>Explanation (AI)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td>{{ e.timestamp[:19] }}</td>
+          <td>{{ e.container_name }}</td>
+          <td>
+            {% if e.score > 75 %}
+              <span class="badge high">{{ e.risk_level }}</span>
+            {% elif e.score > 40 %}
+              <span class="badge medium">{{ e.risk_level }}</span>
+            {% else %}
+              <span class="badge low">{{ e.risk_level }}</span>
+            {% endif %}
+          </td>
+          <td>{{ e.score }}</td>
+          <td>{{ e.ai_score }}</td>
+          <td>{{ e.cve_critical }}</td>
+          <td style="font-size: 0.85em; max-width: 300px; color: var(--muted);">
+            {% set data = e.data %}
+            {{ data.get('ai_explanation', '') }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 32px; color: var(--muted);">No events found matching criteria.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pagination">
+      {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&container={{ container }}&min_score={{ min_score }}" class="btn">Previous</a>
+      {% endif %}
+      <span style="padding: 10px;">Page {{ page }}</span>
+      {% if events|length == 50 %}
+        <a href="?page={{ page + 1 }}&container={{ container }}&min_score={{ min_score }}" class="btn">Next</a>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

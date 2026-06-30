@@ -111,5 +111,32 @@ def get_runtime_history() -> List[Dict[str, Any]]:
     conn.close()
     return [json.loads(row[0]) for row in rows]
 
+def get_runtime_events(container_name: str = None, min_score: int = None, limit: int = 100, offset: int = 0):
+    if not DB_PATH.exists():
+        return []
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    query = "SELECT * FROM runtime_events WHERE 1=1"
+    params = []
+    
+    if container_name:
+        query += " AND container_name LIKE ?"
+        params.append(f"%{container_name}%")
+        
+    if min_score is not None:
+        query += " AND score >= ?"
+        params.append(min_score)
+        
+    query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
 # Initialize DB on import
 init_db()

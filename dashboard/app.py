@@ -248,6 +248,30 @@ def load_runtime_findings():
     }
 
 
+@app.route("/logs")
+@require_dashboard_auth
+def logs_view():
+    """Logs and events viewer page."""
+    try:
+        import db
+        container = request.args.get("container", "")
+        min_score = request.args.get("min_score", "")
+        min_score_val = int(min_score) if min_score.isdigit() else None
+        page = int(request.args.get("page", 1))
+        limit = 50
+        offset = (page - 1) * limit
+        
+        events = db.get_runtime_events(container_name=container, min_score=min_score_val, limit=limit, offset=offset)
+        for e in events:
+            if isinstance(e.get("data"), str):
+                try:
+                    e["data"] = json.loads(e["data"])
+                except:
+                    e["data"] = {}
+        return render_template("logs.html", events=events, container=container, min_score=min_score, page=page)
+    except Exception as e:
+        return f"Error loading logs: {e}", 500
+
 @app.route("/")
 @require_dashboard_auth
 @limiter.limit("10 per minute")
