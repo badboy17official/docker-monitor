@@ -304,6 +304,32 @@ class ThreatScorer:
         score = min(int(round(score)), 100)
         if not reasons:
             reasons = ["No significant anomalies detected"]
+            
+        ai_explanation = ""
+        if score >= 75: # Alert threshold roughly
+            exp_parts = []
+            if cpu_z > 2.0:
+                exp_parts.append(f"abnormal CPU usage {cpu_z:.1f} standard deviations above baseline")
+            elif cpu > 80:
+                exp_parts.append(f"high CPU usage of {cpu:.1f}%")
+            if net_z > 2.0:
+                exp_parts.append(f"elevated network activity {net_z:.1f} standard deviations above baseline")
+            elif net > 100:
+                exp_parts.append(f"elevated network activity ({net:.1f} MB)")
+            if mem_z > 2.0:
+                exp_parts.append(f"abnormal memory usage {mem_z:.1f} standard deviations above baseline")
+            if pid_z > 2.0:
+                exp_parts.append(f"abnormal process count {pid_z:.1f} standard deviations above baseline")
+            if cve_critical > 0:
+                exp_parts.append(f"the presence of {cve_critical} critical CVEs")
+                
+            if exp_parts:
+                ai_explanation = "The combination of " + " and ".join(exp_parts[:2])
+                if len(exp_parts) > 2:
+                    ai_explanation += " along with other anomalies"
+                ai_explanation += " suggests potential resource abuse, exploitation, or anomalous behavior."
+            else:
+                ai_explanation = "Multiple heuristics triggered indicating anomalous behavior, though no single metric deviated extremely."
 
         return {
             "score": score,
@@ -311,6 +337,7 @@ class ThreatScorer:
             "reasons": reasons,
             "detectors_triggered": sorted(set(detectors)),
             "ai_anomaly_score": ai_score,
+            "ai_explanation": ai_explanation,
         }
 
 

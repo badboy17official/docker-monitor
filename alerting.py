@@ -17,9 +17,15 @@ class AlertManager:
         if score < threshold_to_use:
             return
             
+        alert_text = f"🚨 HIGH RISK ALERT 🚨\n{message}\nScore: {score}"
+        
+        context = context or {}
+        if context.get("ai_explanation"):
+            alert_text += f"\n\n🤖 AI Assistant: {context['ai_explanation']}"
+            
         payload = {
-            "text": f"🚨 HIGH RISK ALERT 🚨\n{message}\nScore: {score}",
-            "context": context or {}
+            "text": alert_text,
+            "context": context
         }
         
         if self.webhook_url:
