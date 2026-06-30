@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from ai_security_model import RuleBasedAnomalyScorer
+from ai_security_model import RuleBasedAnomalyScorer, MLAnomalyDetector
 
 try:
     import yaml
@@ -169,7 +169,8 @@ class ThreatScorer:
             }
         )
         self.ewma: Dict[str, Dict[str, float]] = defaultdict(dict)
-        self.model = RuleBasedAnomalyScorer()
+        self.rule_model = RuleBasedAnomalyScorer()
+        self.ml_model = MLAnomalyDetector()
 
     @staticmethod
     def _risk_bucket(score: int) -> str:
@@ -258,19 +259,23 @@ class ThreatScorer:
             reasons.append("EWMA sudden-behavior shift detected")
             detectors.append("ewma")
 
-        ai_score = self.model.score(
-            {
-                "cpu": cpu,
-                "memory": mem,
-                "network_total": net,
-                "pids": pids,
-                "restart_count": restart_count,
-                "cpu_z": cpu_z,
-                "memory_z": mem_z,
-                "network_z": net_z,
-                "pid_z": pid_z,
-            }
-        )
+        features = {
+            "cpu": cpu,
+            "memory": mem,
+            "network_total": net,
+            "pids": pids,
+            "restart_count": restart_count,
+            "cpu_z": cpu_z,
+            "memory_z": mem_z,
+            "network_z": net_z,
+            "pid_z": pid_z,
+        }
+        rule_score = self.rule_model.score(features)
+        ml_score = self.ml_model.score(features)
+        
+        # Ensemble approach: average the rule-based heuristic score with the true ML anomaly score
+        ai_score = (rule_score + ml_score) / 2
+
         if ai_score > 75:
             score += 22
             reasons.append(f"AI model high anomaly probability ({ai_score:.1f})")
