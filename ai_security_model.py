@@ -15,15 +15,15 @@ class RuleBasedRiskScorer:
 
     # Tuned offline; stored as constants (pre-trained model artifact)
     _WEIGHTS = {
-        "critical": 0.92,
-        "high": 0.41,
-        "medium": 0.14,
-        "low": 0.05,
-        "fatal": 0.8,
-        "warn": 0.19,
-        "engine_coverage": -0.35,
+        "critical": 0.08,
+        "high": 0.03,
+        "medium": 0.01,
+        "low": 0.002,
+        "fatal": 0.08,
+        "warn": 0.02,
+        "engine_coverage": -0.5,
     }
-    _BIAS = -1.75
+    _BIAS = -2.0
 
     @staticmethod
     def _sigmoid(x: float) -> float:
