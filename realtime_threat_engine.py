@@ -334,6 +334,9 @@ class RuntimeThreatEngine:
         )
 
         self.scorer = ThreatScorer(window_size=int(rt.get("ai_window_size", 16)))
+        
+        from alerting import AlertManager
+        self.alert_manager = AlertManager(self.config)
 
         if docker is None:
             raise RuntimeError("docker package is not installed. Install with: pip install docker")
@@ -399,6 +402,13 @@ class RuntimeThreatEngine:
                 "restart_count": int((container.attrs or {}).get("RestartCount", 0)),
             }
             scored = self.scorer.score(metrics, vuln.get("critical", 0), vuln.get("high", 0))
+            
+            self.alert_manager.trigger_alert(
+                scored["score"],
+                f"High threat score for container {container.name} (image: {image_ref})",
+                scored
+            )
+            
             return ContainerSignal(
                 **metrics,
                 ai_anomaly_score=scored["ai_anomaly_score"],

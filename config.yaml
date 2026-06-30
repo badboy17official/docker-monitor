@@ -56,11 +56,10 @@ reporting:
   historical_tracking: true
   max_history: 30
   
-# Notification settings
-notifications:
+alerting:
   enabled: false
-  slack_webhook: ""
-  email: ""
+  threshold: 75
+  webhook_url: ""
 
 # CI/CD Integration
 cicd:

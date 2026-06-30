@@ -241,6 +241,21 @@ def main():
         },
     }
 
+    try:
+        import yaml
+        from alerting import AlertManager
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+        alert_manager = AlertManager(config)
+        if hardened_stats["ai_risk_score"] >= alert_manager.threshold:
+            alert_manager.trigger_alert(
+                hardened_stats["ai_risk_score"],
+                "High audit risk score for hardened image",
+                summary
+            )
+    except Exception as e:
+        logger.error(f"Alerting failed: {e}")
+
     Path("reports").mkdir(exist_ok=True)
     with open("reports/latest_multi_engine_summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)

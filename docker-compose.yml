@@ -75,8 +75,8 @@ services:
     environment:
       - FLASK_ENV=production
       - PROJECT_ROOT=/app
-      - DASHBOARD_AUTH_USER=${DASHBOARD_AUTH_USER:-admin}
-      - DASHBOARD_AUTH_PASSWORD=${DASHBOARD_AUTH_PASSWORD:-change-me-now}
+      - DASHBOARD_AUTH_USER=${DASHBOARD_AUTH_USER}
+      - DASHBOARD_AUTH_PASSWORD=${DASHBOARD_AUTH_PASSWORD}
     depends_on:
       - flask-vulnerable
       - flask-hardened
