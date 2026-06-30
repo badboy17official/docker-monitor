@@ -9,11 +9,12 @@ class AlertManager:
         self.threshold = alert_config.get("threshold", 75)
         self.webhook_url = alert_config.get("webhook_url", "")
         
-    def trigger_alert(self, score: float, message: str, context: Dict[str, Any] = None):
+    def trigger_alert(self, score: float, message: str, context: Dict[str, Any] = None, threshold_override: float = None):
         if not self.enabled:
             return
             
-        if score < self.threshold:
+        threshold_to_use = threshold_override if threshold_override is not None else self.threshold
+        if score < threshold_to_use:
             return
             
         payload = {

@@ -349,7 +349,16 @@ def api_control_panel_status():
 @limiter.limit("10 per minute")
 def api_control_panel_containers():
     """List running containers for control panel management."""
-    return jsonify({"containers": list_containers()})
+    containers = list_containers()
+    try:
+        import db
+        protected = db.get_protected_containers()
+        for c in containers:
+            if c.get("ID") and c["ID"][:12] in protected:
+                c["is_protected"] = True
+    except Exception:
+        pass
+    return jsonify({"containers": containers})
 
 
 @app.route("/api/control-panel/runtime/snapshot", methods=["POST"])
@@ -425,6 +434,27 @@ def api_control_panel_container_action():
         ),
         200 if result.returncode == 0 else 500,
     )
+
+@app.route("/api/control-panel/protect/<container_id>", methods=["POST"])
+@require_dashboard_auth
+def api_control_panel_protect(container_id):
+    try:
+        import db
+        container_name = request.json.get("container_name", container_id) if request.json else container_id
+        db.protect_container(container_id, container_name)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/control-panel/unprotect/<container_id>", methods=["POST"])
+@require_dashboard_auth
+def api_control_panel_unprotect(container_id):
+    try:
+        import db
+        db.unprotect_container(container_id)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/runtime-threats/alerts")

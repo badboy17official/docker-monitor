@@ -309,18 +309,36 @@
         tbody.innerHTML = '<tr><td colspan="4" class="empty">No running containers found.</td></tr>';
         return;
       }
-      tbody.innerHTML = data.containers.map(c => `
+      tbody.innerHTML = data.containers.map(c => {
+        const isProtected = c.is_protected || false;
+        const protectBtn = isProtected 
+          ? `<button class="btn btn-tonal" style="color:var(--good);border-color:var(--good);" onclick="toggleProtect('${c.ID.substring(0, 12)}', '${c.Names}', false)">Unprotect</button>`
+          : `<button class="btn btn-tonal" onclick="toggleProtect('${c.ID.substring(0, 12)}', '${c.Names}', true)">Protect</button>`;
+        return `
         <tr>
-          <td>${c.Names}</td>
+          <td>${c.Names} ${isProtected ? '🛡️' : ''}</td>
           <td>${c.Image}</td>
           <td>${c.Status}</td>
           <td>
+            ${protectBtn}
             <button class="btn btn-tonal" onclick="containerAction('${c.Names}', 'restart')">Restart</button>
             <button class="btn btn-filled" onclick="containerAction('${c.Names}', 'stop')">Stop</button>
           </td>
         </tr>
-      `).join('');
+      `;}).join('');
       appendLog(`Loaded ${data.containers.length} containers`);
+    }
+
+    async function toggleProtect(containerId, containerName, protect) {
+      const endpoint = protect ? `/api/control-panel/protect/${containerId}` : `/api/control-panel/unprotect/${containerId}`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ container_name: containerName })
+      });
+      const data = await res.json();
+      appendLog(`${protect ? 'PROTECT' : 'UNPROTECT'} ${containerName}: ${data.success ? 'OK' : 'FAILED'}`);
+      await loadContainers();
     }
 
     async function containerAction(container, action) {

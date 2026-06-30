@@ -28,6 +28,47 @@ def init_db():
             data JSON NOT NULL
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS protected_containers (
+            container_id TEXT PRIMARY KEY,
+            container_name TEXT NOT NULL,
+            protected_since TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def is_container_protected(container_id: str) -> bool:
+    if not DB_PATH.exists():
+        return False
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM protected_containers WHERE container_id = ?", (container_id,))
+    res = cursor.fetchone()
+    conn.close()
+    return bool(res)
+
+def get_protected_containers() -> List[str]:
+    if not DB_PATH.exists():
+        return []
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT container_id FROM protected_containers")
+    res = [r[0] for r in cursor.fetchall()]
+    conn.close()
+    return res
+
+def protect_container(container_id: str, container_name: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO protected_containers (container_id, container_name, protected_since) VALUES (?, ?, ?)", (container_id, container_name, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+def unprotect_container(container_id: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM protected_containers WHERE container_id = ?", (container_id,))
     conn.commit()
     conn.close()
 

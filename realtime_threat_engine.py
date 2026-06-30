@@ -416,12 +416,24 @@ class RuntimeThreatEngine:
                 "pids": int((stats.get("pids_stats") or {}).get("current", 0)),
                 "restart_count": int((container.attrs or {}).get("RestartCount", 0)),
             }
+            try:
+                import db
+                is_protected = db.is_container_protected(container.id[:12])
+            except Exception:
+                is_protected = False
+
+            if is_protected:
+                metrics["is_protected"] = True
+                
             scored = self.scorer.score(metrics, vuln.get("critical", 0), vuln.get("high", 0))
+            
+            threshold = self.alert_manager.threshold - 20 if is_protected else self.alert_manager.threshold
             
             self.alert_manager.trigger_alert(
                 scored["score"],
-                f"High threat score for container {container.name} (image: {image_ref})",
-                scored
+                f"{'[PROTECTED] ' if is_protected else ''}High threat score for container {container.name} (image: {image_ref})",
+                scored,
+                threshold_override=threshold
             )
             
             return ContainerSignal(
