@@ -219,6 +219,13 @@ Both enforce vulnerability thresholds and fail the build if critical CVEs exceed
 
 ---
 
+## Security
+
+The dashboard now mandates authentication by default to prevent unauthorized access.
+- You must set the `DASHBOARD_AUTH_USER` and `DASHBOARD_AUTH_PASSWORD` environment variables before starting the dashboard.
+- For local development only, you can bypass authentication by setting `DASHBOARD_ALLOW_INSECURE=true`.
+- The dashboard control endpoints are protected against brute-force attacks with rate limiting (10 requests per minute) and overall application limits (200 per day, 50 per hour) via Flask-Limiter.
+
 ## Security Checklist
 
 **Container level:**

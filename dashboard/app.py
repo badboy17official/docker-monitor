@@ -51,7 +51,17 @@ if str(PROJECT_ROOT) not in sys.path:
 from realtime_threat_engine import RuntimeThreatEngine
 
 
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
 app = Flask(__name__, template_folder=str(DASHBOARD_DIR / "templates"))
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
 
 REPORTS_DIR = PROJECT_ROOT / "reports"
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
@@ -63,6 +73,13 @@ RUNTIME_DIR.mkdir(exist_ok=True)
 
 CONTROL_USER = os.getenv("DASHBOARD_AUTH_USER", "")
 CONTROL_PASSWORD = os.getenv("DASHBOARD_AUTH_PASSWORD", "")
+ALLOW_INSECURE = os.getenv("DASHBOARD_ALLOW_INSECURE", "").lower() == "true"
+
+# Allow skipping auth during tests
+if not app.config.get("TESTING", False):
+    if not ALLOW_INSECURE and not (CONTROL_USER and CONTROL_PASSWORD):
+        raise RuntimeError("Dashboard authentication credentials not configured! Set DASHBOARD_AUTH_USER and DASHBOARD_AUTH_PASSWORD env vars, or DASHBOARD_ALLOW_INSECURE=true for local dev.")
+
 CONTROL_AUTH_ENABLED = bool(CONTROL_USER and CONTROL_PASSWORD)
 
 
@@ -202,6 +219,7 @@ def load_runtime_findings():
 
 @app.route("/")
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def index():
     """Main dashboard page."""
     report = load_latest_report()
@@ -266,6 +284,7 @@ def api_runtime_threats():
 
 @app.route("/api/control-panel/status")
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def api_control_panel_status():
     """Control panel status summary for security tooling and outputs."""
     runtime_file = RUNTIME_DIR / "runtime_threats_latest.json"
@@ -287,6 +306,7 @@ def api_control_panel_status():
 
 @app.route("/api/control-panel/containers")
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def api_control_panel_containers():
     """List running containers for control panel management."""
     return jsonify({"containers": list_containers()})
@@ -294,6 +314,7 @@ def api_control_panel_containers():
 
 @app.route("/api/control-panel/runtime/snapshot", methods=["POST"])
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def api_control_panel_runtime_snapshot():
     """Trigger a one-shot runtime threat snapshot."""
     command = [sys.executable, "realtime_threat_engine.py"]
@@ -314,6 +335,7 @@ def api_control_panel_runtime_snapshot():
 
 @app.route("/api/control-panel/audit/run", methods=["POST"])
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def api_control_panel_run_audit():
     """Trigger a security audit run from the control panel."""
     command = [sys.executable, "audit.py"]
@@ -334,6 +356,7 @@ def api_control_panel_run_audit():
 
 @app.route("/api/control-panel/container-action", methods=["POST"])
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def api_control_panel_container_action():
     """Apply start/stop/restart actions to a container."""
     data = request.get_json(silent=True) or {}
@@ -382,6 +405,7 @@ def api_runtime_container_detail(name):
 
 @app.route("/api/control-panel/report/runtime", methods=["POST"])
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def api_control_panel_runtime_report():
     """Generate runtime security report on-demand (json/txt)."""
     payload = request.get_json(silent=True) or {}
@@ -403,6 +427,7 @@ def api_control_panel_runtime_report():
 
 @app.route("/reports/<path:filename>")
 @require_dashboard_auth
+@limiter.limit("10 per minute")
 def download_report(filename):
     """Download report files from reports directory only."""
     reports_root = REPORTS_DIR.resolve()
