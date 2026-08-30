@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Login - Docker Monitor{% endblock %}
+{% block body %}
+<div class="min-h-screen flex items-center justify-center p-4">
+  <div class="glass glow rounded-2xl p-8 w-full max-w-md">
+    <div class="text-center mb-8">
+      <h1 class="text-2xl font-bold text-white mb-2">Docker Monitor</h1>
+      <p class="text-slate-400">Authentication Required</p>
+    </div>
+    {% if error %}
+    <div class="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 mb-6 text-center text-sm">{{ error }}</div>
+    {% endif %}
+    <form method="POST" action="/login">
+      <div class="mb-4">
+        <label class="block text-slate-400 text-sm mb-2">Username</label>
+        <input type="text" name="username" required autofocus
+          class="w-full bg-slate-800 border border-slate-600 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition">
+      </div>
+      <div class="mb-6">
+        <label class="block text-slate-400 text-sm mb-2">Password</label>
+        <input type="password" name="password" required
+          class="w-full bg-slate-800 border border-slate-600 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition">
+      </div>
+      <button type="submit"
+        class="w-full bg-gradient-to-r from-sky-600 to-blue-600 text-white font-semibold py-3 rounded-xl hover:from-sky-500 hover:to-blue-500 transition-all">
+        Login
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

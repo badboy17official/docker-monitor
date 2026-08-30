@@ -24,7 +24,7 @@ wheels/
 venv/
 env/
 ENV/
-.venv
+.venv/
 
 # IDE
 .vscode/
@@ -35,7 +35,23 @@ ENV/
 
 # Security scan results
 scan_*.txt
-audit_report.txt
+scan_*.json
+
+# Reports and runtime output
+reports/
+runtime/
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# CVE cache
+cve_cache.json
+
+# ML model (generated/downloaded)
+ml_anomaly_model.joblib
 
 # Docker
 *.log
@@ -43,10 +59,14 @@ audit_report.txt
 # OS
 .DS_Store
 Thumbs.db
-.codex
 
 # Secrets
 *.pem
 *.key
 .env
 secrets.txt
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/

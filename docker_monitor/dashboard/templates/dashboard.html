@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Docker Monitor{% endblock %}
+{% block body %}
+<div class="max-w-[1500px] mx-auto p-6">
+  <!-- Top Bar -->
+  <header class="glass glow rounded-2xl p-5 mb-6 flex flex-wrap justify-between items-center gap-4">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-wide">Docker Security Monitor</h1>
+      <p class="text-slate-400 text-sm">Real-time threat telemetry and vulnerability intelligence</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="/logs" class="px-4 py-2 rounded-xl border border-slate-600 text-sm font-semibold hover:bg-slate-700 transition">Logs</a>
+      <button onclick="runSnapshot()" class="px-4 py-2 rounded-xl bg-sky-600/20 border border-sky-500/30 text-sky-400 text-sm font-semibold hover:bg-sky-600/30 transition">Snapshot</button>
+      <button onclick="runAudit()" class="px-4 py-2 rounded-xl bg-red-600/20 border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-600/30 transition">Run Audit</button>
+      <button onclick="location.reload()" class="px-4 py-2 rounded-xl bg-slate-700 text-sm font-semibold hover:bg-slate-600 transition">Refresh</button>
+      <a href="/logout" class="px-4 py-2 rounded-xl border border-slate-600 text-sm font-semibold hover:bg-slate-700 transition">Logout</a>
+    </div>
+  </header>
+
+  <!-- Control Panel -->
+  <section class="glass rounded-2xl p-5 mb-6">
+    <h2 class="text-lg font-semibold text-white mb-1">Security Operations</h2>
+    <p class="text-slate-400 text-sm mb-4">Tool status and container management</p>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-4" id="tool-grid">
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Docker</div><div id="tool-docker" class="font-bold">...</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Trivy</div><div id="tool-trivy" class="font-bold">...</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Dockle</div><div id="tool-dockle" class="font-bold">...</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Syft</div><div id="tool-syft" class="font-bold">...</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Grype</div><div id="tool-grype" class="font-bold">...</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Containers</div><div id="running-count" class="font-bold text-sky-400">0</div></div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-slate-400 text-xs uppercase border-b border-slate-700">
+          <th class="p-3 text-left">Name</th><th class="p-3 text-left">Image</th><th class="p-3 text-left">Status</th><th class="p-3 text-left">Actions</th>
+        </tr></thead>
+        <tbody id="container-body"><tr><td colspan="4" class="p-4 text-center text-slate-500">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <div id="control-log" class="mt-3 bg-slate-900 rounded-xl p-3 text-xs font-mono text-sky-300 max-h-40 overflow-y-auto whitespace-pre-wrap">Ready...</div>
+  </section>
+
+  {% if report %}
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="glass rounded-xl p-4 card-hover">
+      <div class="text-slate-400 text-xs mb-1">AI Risk Drop</div>
+      <div class="text-2xl font-bold text-green-400">{{ report.comparison.ai_risk_drop }}</div>
+    </div>
+    <div class="glass rounded-xl p-4 card-hover">
+      <div class="text-slate-400 text-xs mb-1">Critical Fixed</div>
+      <div class="text-2xl font-bold text-green-400">{{ report.comparison.critical_drop }}</div>
+    </div>
+    <div class="glass rounded-xl p-4 card-hover">
+      <div class="text-slate-400 text-xs mb-1">High Fixed</div>
+      <div class="text-2xl font-bold text-green-400">{{ report.comparison.high_drop }}</div>
+    </div>
+    <div class="glass rounded-xl p-4 card-hover">
+      <div class="text-slate-400 text-xs mb-1">Last Scan</div>
+      <div class="text-lg font-bold">{{ report.timestamp[:10] if report.timestamp else 'N/A' }}</div>
+    </div>
+  </div>
+
+  <!-- Runtime Threat Matrix -->
+  <section class="glass rounded-2xl p-5 mb-6">
+    <h2 class="text-lg font-semibold text-white mb-4">Runtime Threat Matrix</h2>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Monitored</div><div class="text-xl font-bold text-sky-400">{{ runtime.summary.containers_monitored }}</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Critical</div><div class="text-xl font-bold text-red-400">{{ runtime.summary.critical_alerts }}</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">High</div><div class="text-xl font-bold text-amber-400">{{ runtime.summary.high_alerts }}</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">CVE Critical</div><div class="text-xl font-bold text-red-400">{{ runtime.summary.total_cve_critical if runtime.summary.total_cve_critical is defined else 0 }}</div></div>
+      <div class="bg-slate-800/60 rounded-xl p-3 text-center"><div class="text-slate-400 text-xs mb-1">Last Check</div><div class="text-sm font-bold">{{ runtime.generated_at[:16] if runtime.generated_at else 'N/A' }}</div></div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-slate-400 text-xs uppercase border-b border-slate-700">
+          <th class="p-2 text-left">Container</th><th class="p-2 text-left">Risk</th><th class="p-2 text-left">Score</th>
+          <th class="p-2 text-left">AI%</th><th class="p-2 text-left">CPU%</th><th class="p-2 text-left">Mem%</th><th class="p-2 text-left">Reason</th>
+        </tr></thead>
+        <tbody>
+          {% for f in runtime.findings %}
+          <tr class="border-b border-slate-800 hover:bg-slate-800/40">
+            <td class="p-2">{{ f.name }}</td>
+            <td class="p-2">
+              <span class="px-2 py-1 rounded-full text-xs font-bold
+                {% if f.risk_level in ['critical','high'] %}bg-red-500/20 text-red-400
+                {% elif f.risk_level == 'medium' %}bg-amber-500/20 text-amber-400
+                {% else %}bg-green-500/20 text-green-400{% endif %}">
+                {{ f.risk_level|upper }}
+              </span>
+            </td>
+            <td class="p-2 font-mono">{{ f.score }}</td>
+            <td class="p-2 font-mono">{{ "%.1f"|format(f.ai_anomaly_score) if f.ai_anomaly_score is defined else "0.0" }}</td>
+            <td class="p-2 font-mono">{{ "%.1f"|format(f.cpu_percent) }}</td>
+            <td class="p-2 font-mono">{{ "%.1f"|format(f.memory_percent) }}</td>
+            <td class="p-2 text-slate-400 text-xs">{{ f.reasons[0] if f.reasons else 'N/A' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="p-4 text-center text-slate-500">No runtime findings. Run a snapshot.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Vulnerability Charts -->
+  <section class="glass rounded-2xl p-5 mb-6">
+    <h2 class="text-lg font-semibold text-white mb-4">Vulnerability Analytics</h2>
+    <div class="grid md:grid-cols-2 gap-4 mb-4">
+      <div class="bg-slate-800/40 rounded-xl p-4"><canvas id="vulnChart"></canvas></div>
+      <div class="bg-slate-800/40 rounded-xl p-4"><canvas id="scoreChart"></canvas></div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-slate-400 text-xs uppercase border-b border-slate-700">
+          <th class="p-2 text-left">Severity</th><th class="p-2 text-left">Vulnerable</th><th class="p-2 text-left">Hardened</th><th class="p-2 text-left">Delta</th>
+        </tr></thead>
+        <tbody>
+          <tr class="border-b border-slate-800"><td class="p-2"><span class="px-2 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400">CRITICAL</span></td>
+            <td class="p-2">{{ report.vulnerable.critical }}</td><td class="p-2">{{ report.hardened.critical }}</td><td class="p-2 text-green-400">-{{ report.vulnerable.critical - report.hardened.critical }}</td></tr>
+          <tr class="border-b border-slate-800"><td class="p-2"><span class="px-2 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400">HIGH</span></td>
+            <td class="p-2">{{ report.vulnerable.high }}</td><td class="p-2">{{ report.hardened.high }}</td><td class="p-2 text-green-400">-{{ report.vulnerable.high - report.hardened.high }}</td></tr>
+          <tr class="border-b border-slate-800"><td class="p-2"><span class="px-2 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-400">MEDIUM</span></td>
+            <td class="p-2">{{ report.vulnerable.medium }}</td><td class="p-2">{{ report.hardened.medium }}</td><td class="p-2 text-green-400">-{{ report.vulnerable.medium - report.hardened.medium }}</td></tr>
+          <tr><td class="p-2"><span class="px-2 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400">LOW</span></td>
+            <td class="p-2">{{ report.vulnerable.low }}</td><td class="p-2">{{ report.hardened.low }}</td><td class="p-2 text-green-400">-{{ report.vulnerable.low - report.hardened.low }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% else %}
+  <section class="glass rounded-2xl p-8 text-center">
+    <h2 class="text-lg font-semibold text-white mb-2">No Audit Data</h2>
+    <p class="text-slate-400">Run <code class="bg-slate-800 px-2 py-1 rounded text-sky-400">docker-monitor audit</code> to generate security reports.</p>
+  </section>
+  {% endif %}
+</div>
+
+<script>
+function appendLog(msg) {
+  const el = document.getElementById('control-log');
+  el.textContent = `[${new Date().toISOString()}] ${msg}\n` + el.textContent;
+}
+function setTool(id, ok) {
+  const el = document.getElementById(id);
+  el.innerHTML = ok ? '<span class="text-green-400 font-bold text-sm">OK</span>' : '<span class="text-red-400 font-bold text-sm">MISSING</span>';
+}
+async function refreshPanel() {
+  try {
+    const res = await fetch('/api/control-panel/status');
+    const d = await res.json();
+    setTool('tool-docker', d.tools.docker);
+    setTool('tool-trivy', d.tools.trivy);
+    setTool('tool-dockle', d.tools.dockle);
+    setTool('tool-syft', d.tools.syft);
+    setTool('tool-grype', d.tools.grype);
+    document.getElementById('running-count').textContent = d.containers_running;
+    appendLog('Panel refreshed');
+  } catch(e) { appendLog('Panel refresh failed: ' + e); }
+}
+async function loadContainers() {
+  try {
+    const res = await fetch('/api/control-panel/containers');
+    const d = await res.json();
+    const tbody = document.getElementById('container-body');
+    if (!d.containers.length) { tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-500">No containers</td></tr>'; return; }
+    tbody.innerHTML = d.containers.map(c => {
+      const prot = c.is_protected || false;
+      return `<tr class="border-b border-slate-800 hover:bg-slate-800/40">
+        <td class="p-2">${c.Names} ${prot ? '&#128737;' : ''}</td>
+        <td class="p-2 text-slate-400">${c.Image}</td>
+        <td class="p-2">${c.Status}</td>
+        <td class="p-2 flex gap-1 flex-wrap">
+          <button onclick="toggleProtect('${c.ID.substring(0,12)}','${c.Names}',${!prot})" class="px-2 py-1 rounded text-xs ${prot ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-300'} hover:bg-slate-600">${prot ? 'Unprotect' : 'Protect'}</button>
+          <button onclick="containerAction('${c.Names}','restart')" class="px-2 py-1 rounded text-xs bg-slate-700 text-slate-300 hover:bg-slate-600">Restart</button>
+          <button onclick="containerAction('${c.Names}','stop')" class="px-2 py-1 rounded text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30">Stop</button>
+        </td></tr>`;
+    }).join('');
+    appendLog(`Loaded ${d.containers.length} containers`);
+  } catch(e) { appendLog('Load containers failed: ' + e); }
+}
+async function toggleProtect(id, name, protect) {
+  const ep = protect ? `/api/control-panel/protect/${id}` : `/api/control-panel/unprotect/${id}`;
+  const res = await fetch(ep, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({container_name: name}) });
+  const d = await res.json();
+  appendLog(`${protect?'PROTECT':'UNPROTECT'} ${name}: ${d.success?'OK':'FAIL'}`);
+  loadContainers();
+}
+async function containerAction(name, action) {
+  const res = await fetch('/api/control-panel/container-action', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({container: name, action}) });
+  const d = await res.json();
+  appendLog(`${action.toUpperCase()} ${name}: ${d.success?'OK':'FAIL'}`);
+  loadContainers();
+}
+async function runSnapshot() {
+  appendLog('Running runtime snapshot...');
+  const res = await fetch('/api/control-panel/runtime/snapshot', { method: 'POST' });
+  const d = await res.json();
+  appendLog(`Snapshot ${d.success?'completed':'failed'} (exit ${d.exit_code})`);
+  if (d.success) setTimeout(() => location.reload(), 1000);
+}
+async function runAudit() {
+  appendLog('Running full audit...');
+  const res = await fetch('/api/control-panel/audit/run', { method: 'POST' });
+  const d = await res.json();
+  appendLog(`Audit ${d.success?'completed':'failed'} (exit ${d.exit_code})`);
+  if (d.success) setTimeout(() => location.reload(), 2000);
+}
+refreshPanel();
+loadContainers();
+
+{% if report %}
+const chartColor = '#94a3b8';
+const gridColor = 'rgba(71,85,105,0.3)';
+new Chart(document.getElementById('vulnChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: ['Critical','High','Medium','Low'],
+    datasets: [
+      { label: 'Vulnerable', data: [{{report.vulnerable.critical}},{{report.vulnerable.high}},{{report.vulnerable.medium}},{{report.vulnerable.low}}], backgroundColor: 'rgba(248,113,113,0.7)', borderRadius: 6 },
+      { label: 'Hardened', data: [{{report.hardened.critical}},{{report.hardened.high}},{{report.hardened.medium}},{{report.hardened.low}}], backgroundColor: 'rgba(74,222,128,0.7)', borderRadius: 6 }
+    ]
+  },
+  options: { plugins: { legend: { labels: { color: chartColor } } }, scales: { y: { beginAtZero: true, ticks: { color: chartColor }, grid: { color: gridColor } }, x: { ticks: { color: chartColor }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('scoreChart').getContext('2d'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Vulnerable Risk','Hardened Risk'],
+    datasets: [{ data: [{{report.vulnerable.ai_risk_score}},{{report.hardened.ai_risk_score}}], backgroundColor: ['rgba(248,113,113,0.8)','rgba(74,222,128,0.8)'] }]
+  },
+  options: { plugins: { legend: { labels: { color: chartColor } } } }
+});
+{% endif %}
+</script>
+{% endblock %}

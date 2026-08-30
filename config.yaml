@@ -1,12 +1,10 @@
-# Container Security Audit Configuration
-# Customize scanning parameters, thresholds, and reporting options
+# Docker Monitor v2.8 Configuration
+# Every key below is read and used by the application.
 
 project:
-  name: "Container Security Audit"
-  version: "2.0"
-  author: "DevSecOps Team"
+  name: "docker-monitor"
+  version: "2.8.0"
 
-# Docker image settings
 images:
   vulnerable:
     name: "flask-app-vulnerable"
@@ -17,79 +15,66 @@ images:
     dockerfile: "Dockerfile.hardened"
     context: "."
 
-# Security scanning tools configuration
 scanning:
+  parallel: true
+  max_workers: 4
   trivy:
     enabled: true
     severity: ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
     timeout: 300
     ignore_unfixed: false
-    
   dockle:
     enabled: true
-    ignore_codes: []
     timeout: 120
-    
   syft:
     enabled: true
     format: "json"
-
   grype:
     enabled: true
     format: "json"
-    
-# Vulnerability thresholds (fail build if exceeded)
+
 thresholds:
   critical: 5
   high: 20
   medium: 50
   low: 100
   image_size_mb: 500
+  fail_on_exceed: true
 
-# Report generation settings
 reporting:
-  formats:
-    - "json"
-    - "html"
-    - "text"
+  formats: ["json", "html"]
   output_dir: "reports"
-  historical_tracking: true
   max_history: 30
-  
+
 alerting:
   enabled: false
   threshold: 75
   webhook_url: ""
 
-# CI/CD Integration
-cicd:
-  fail_on_threshold_exceeded: true
-  export_metrics: true
-  metrics_file: "metrics.json"
-
-
-# Runtime threat monitoring (real-time Docker telemetry + AI-style anomaly scoring)
-runtime_monitoring:
+runtime:
   enabled: true
   poll_interval_seconds: 20
-  max_events: 100
   ai_window_size: 12
+  max_concurrent_scans: 3
   hosts:
     - "unix://var/run/docker.sock"
 
+vulnerability:
+  enabled: true
+  scan_cache_ttl_seconds: 900
+
 cloud:
   enabled: true
-  sync_interval_hours: 6
   source: "osv"
+  sync_interval_hours: 6
+  max_concurrent_fetches: 5
 
+ml:
+  enabled: false
+  model_url: ""
+  model_sha256: ""
 
-# AI detection settings
-ai_detection:
-  static_pretrained_model: "logistic_v1"
-  runtime_pretrained_model: "anomaly_v1"
-
-
-# Runtime vulnerability monitoring for running container images
-vulnerability_monitoring:
-  enabled: true
-  image_scan_cache_ttl_seconds: 900
+dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  rate_limit: "200 per day"

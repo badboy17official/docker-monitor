@@ -1,6 +1,5 @@
-# GitLab CI/CD Pipeline for Container Security Audit
-
 stages:
+  - test
   - build
   - scan
   - report
@@ -8,10 +7,18 @@ stages:
 
 variables:
   DOCKER_DRIVER: overlay2
-  TRIVY_VERSION: "latest"
-  SECURE_FILES_DOWNLOAD_PATH: '.'
 
-# Build vulnerable image
+test:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install -r requirements.txt pytest
+    - PYTHONPATH=. pytest tests/ -v
+  only:
+    - merge_requests
+    - main
+    - develop
+
 build:vulnerable:
   stage: build
   image: docker:latest
@@ -23,7 +30,6 @@ build:vulnerable:
   tags:
     - docker
 
-# Build hardened image
 build:hardened:
   stage: build
   image: docker:latest
@@ -35,7 +41,6 @@ build:hardened:
   tags:
     - docker
 
-# Trivy vulnerability scan
 scan:trivy:vulnerable:
   stage: scan
   image: aquasec/trivy:latest
@@ -63,68 +68,21 @@ scan:trivy:hardened:
   dependencies:
     - build:hardened
 
-# Dockle security linting
-scan:dockle:vulnerable:
-  stage: scan
-  image: docker:latest
-  services:
-    - docker:dind
-  before_script:
-    - apk add --no-cache wget
-    - wget -q https://github.com/goodwithtech/dockle/releases/latest/download/dockle_Linux-64bit.tar.gz
-    - tar zxf dockle_Linux-64bit.tar.gz
-    - mv dockle /usr/local/bin/
-  script:
-    - dockle --exit-code 0 --format json --output dockle-vulnerable.json $CI_REGISTRY_IMAGE/vulnerable:$CI_COMMIT_SHA
-  artifacts:
-    paths:
-      - dockle-vulnerable.json
-    expire_in: 30 days
-  dependencies:
-    - build:vulnerable
-  allow_failure: true
-
-scan:dockle:hardened:
-  stage: scan
-  image: docker:latest
-  services:
-    - docker:dind
-  before_script:
-    - apk add --no-cache wget
-    - wget -q https://github.com/goodwithtech/dockle/releases/latest/download/dockle_Linux-64bit.tar.gz
-    - tar zxf dockle_Linux-64bit.tar.gz
-    - mv dockle /usr/local/bin/
-  script:
-    - dockle --exit-code 1 --exit-level warn --format json --output dockle-hardened.json $CI_REGISTRY_IMAGE/hardened:$CI_COMMIT_SHA
-  artifacts:
-    paths:
-      - dockle-hardened.json
-    expire_in: 30 days
-  dependencies:
-    - build:hardened
-
-# Generate comprehensive report
 report:generate:
   stage: report
   image: python:3.11-slim
   script:
-    - pip install pyyaml
-    - python audit.py
-    - python report_generator.py
+    - pip install -r requirements.txt
+    - python -m docker_monitor.cli audit
+    - python -m docker_monitor.cli report --format html
   artifacts:
     paths:
       - reports/
-      - scan_*.txt
-    reports:
-      junit: reports/audit_report.xml
     expire_in: 90 days
   dependencies:
     - scan:trivy:vulnerable
     - scan:trivy:hardened
-    - scan:dockle:vulnerable
-    - scan:dockle:hardened
 
-# Deploy to staging (only hardened image)
 deploy:staging:
   stage: deploy
   image: alpine:latest
@@ -136,9 +94,7 @@ deploy:staging:
   when: manual
   environment:
     name: staging
-    url: https://staging.example.com
 
-# Deploy to production (only hardened image, with approval)
 deploy:production:
   stage: deploy
   image: alpine:latest
@@ -150,11 +106,5 @@ deploy:production:
   when: manual
   environment:
     name: production
-    url: "http://localhost:8080"  # TODO: replace with real URL :D
   dependencies:
     - report:generate
-  needs:
-    - job: scan:trivy:hardened
-      artifacts: true
-    - job: scan:dockle:hardened
-      artifacts: true

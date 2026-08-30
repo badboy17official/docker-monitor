@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # Vulnerable Flask Application
   flask-vulnerable:
     build:
       context: .
@@ -12,14 +9,10 @@ services:
       - "5001:5000"
     environment:
       - FLASK_ENV=development
-      - API_KEY=super-secret-key  # ❌ Hardcoded secret
-    # ❌ Running as root (default)
-    # ❌ No resource limits
-    # ❌ No health checks
+      - API_KEY=super-secret-key
     networks:
       - app-network
 
-  # Hardened Flask Application
   flask-hardened:
     build:
       context: .
@@ -30,7 +23,6 @@ services:
       - "5002:5000"
     environment:
       - FLASK_ENV=production
-    # ✅ Resource limits
     deploy:
       resources:
         limits:
@@ -39,18 +31,15 @@ services:
         reservations:
           cpus: '0.25'
           memory: 128M
-    # ✅ Health check
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    # ✅ Read-only filesystem (except tmp)
     read_only: true
     tmpfs:
       - /tmp
-    # ✅ Security options
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -58,23 +47,20 @@ services:
     networks:
       - app-network
 
-  # Security Dashboard
   dashboard:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
     image: security-dashboard:latest
     container_name: security-dashboard
-    user: "0:0"  # Required for Docker socket access (control panel actions)
     ports:
       - "8080:8080"
     volumes:
       - ./reports:/app/reports
       - ./runtime:/app/runtime
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - FLASK_ENV=production
-      - PROJECT_ROOT=/app
       - DASHBOARD_AUTH_USER=${DASHBOARD_AUTH_USER}
       - DASHBOARD_AUTH_PASSWORD=${DASHBOARD_AUTH_PASSWORD}
     depends_on:
@@ -91,6 +77,3 @@ services:
 networks:
   app-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
